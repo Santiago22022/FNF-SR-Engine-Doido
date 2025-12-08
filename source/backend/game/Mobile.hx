@@ -21,7 +21,7 @@ class Mobile
             case RELEASED:
                 return touch.released;
             case JUST_PRESSED:
-                return touch.justReleased;
+                return touch.justPressed;
             case JUST_RELEASED:
                 return touch.justReleased;
         }
@@ -37,7 +37,7 @@ class Mobile
             case RELEASED:
                 return FlxG.mouse.released;
             case JUST_PRESSED:
-                return FlxG.mouse.justReleased;
+                return FlxG.mouse.justPressed;
             case JUST_RELEASED:
                 return FlxG.mouse.justReleased;
         }

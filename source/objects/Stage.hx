@@ -5,8 +5,10 @@ import flixel.FlxSprite;
 import flixel.group.FlxGroup;
 import flixel.math.FlxPoint;
 import states.PlayState;
+import objects.BackgroundGirls;
+import backend.game.IStepHit;
 
-class Stage extends FlxGroup
+class Stage extends FlxGroup implements IStepHit
 {
 	public static var instance:Stage;
 
@@ -186,27 +188,8 @@ class Stage extends FlxGroup
 					treeLeaves.scrollFactor.set(0.85, 0.85);
 					add(treeLeaves);
 					
-					var bgGirls = new FlxSprite(-100, 175); // 190
-					bgGirls.frames = Paths.getSparrowAtlas('stages/school/bgFreaks');
-					bgGirls.scrollFactor.set(0.9, 0.9);
-					
-					var girlAnim:String = "girls group";
-					if(PlayState.SONG.song == 'roses')
-						girlAnim = 'fangirls dissuaded';
-					
-					bgGirls.animation.addByIndices('danceLeft',  'BG $girlAnim', CoolUtil.intArray(14),		"", 24, false);
-					bgGirls.animation.addByIndices('danceRight', 'BG $girlAnim', CoolUtil.intArray(30, 15), "", 24, false);
-					bgGirls.animation.play('danceLeft');
-					bgGirls._stepHit = function(curStep:Int)
-					{
-						if(curStep % 4 == 0)
-						{
-							if(bgGirls.animation.curAnim.name == 'danceLeft')
-								bgGirls.animation.play('danceRight', true);
-							else
-								bgGirls.animation.play('danceLeft', true);
-						}
-					}
+					var bgGirls = new BackgroundGirls(-100, 175);
+					if (PlayState.instance != null) PlayState.instance.addStepHit(bgGirls);
 					add(bgGirls);
 				}
 				
@@ -261,7 +244,7 @@ class Stage extends FlxGroup
 		callScript("update", [elapsed]);
 	}
 	
-	public function stepHit(curStep:Int = -1)
+	public function stepHit(curStep:Int)
 	{
 		// beat hit
 		// if(curStep % 4 == 0)

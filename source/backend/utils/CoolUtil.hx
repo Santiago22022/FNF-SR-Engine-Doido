@@ -80,6 +80,8 @@ class CoolUtil
 	// REMINDER! despite renaming the function from "dumbCamPosLerp" to "camPosLerp" this function is still dumb!
 	public static function camPosLerp(cam:flixel.FlxCamera, target:flixel.FlxObject, lerp:Float = 1)
 	{
+		if(cam == null || target == null)
+			return;
 		cam.scroll.x = FlxMath.lerp(cam.scroll.x, target.x - FlxG.width / 2, lerp);
 		cam.scroll.y = FlxMath.lerp(cam.scroll.y, target.y - FlxG.height/ 2, lerp);
 	}

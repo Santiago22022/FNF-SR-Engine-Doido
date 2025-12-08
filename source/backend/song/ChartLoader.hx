@@ -5,6 +5,7 @@ import backend.song.SongData.SwagSection;
 import backend.song.SongData.SwagSong;
 import objects.note.EventNote;
 import objects.note.Note;
+import backend.utils.ObjectPool;
 
 using StringTools;
 
@@ -14,7 +15,7 @@ using StringTools;
 
 class ChartLoader
 {
-	public static function getChart(SONG:SwagSong):Array<Note>
+	public static function getChart(SONG:SwagSong, notePool:ObjectPool<Note>):Array<Note>
 	{
 		var unspawnNotes:Array<Note> = [];
 		var daSection:Int = 0;
@@ -46,7 +47,7 @@ class ChartLoader
 				if(songNotes[1] < 0) continue;
 				
 				// create the new note
-				var swagNote:Note = new Note();
+				var swagNote:Note = notePool.get();
 				swagNote.updateData(daStrumTime, daNoteData, daNoteType);
 				
 				unspawnNotes.push(swagNote);
@@ -78,7 +79,7 @@ class ChartLoader
 					{
 						var isHoldEnd = (j == holdLoop);
 						
-						var holdNote:Note = new Note();
+						var holdNote:Note = notePool.get();
 						holdNote.isHold = true;
 						holdNote.isHoldEnd = isHoldEnd;
 						holdNote.updateData(daStrumTime, daNoteData, daNoteType);

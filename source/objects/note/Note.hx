@@ -203,7 +203,19 @@ class Note extends FlxSprite
 		gotHeld = false;
 		gotReleased = false;
 		holdHitLength = 0;
-		//spawned = false;
+		spawned = false;
+		isHold = false;
+		isHoldEnd = false;
+		noteAngle = 0;
+		noteOffset.set(0, 0);
+		noteCrochet = 0;
+		holdLength = 0;
+		holdClipHeight = 0;
+		parentNote = null;
+		children.resize(0);
+		strumlineID = 0;
+		scrollSpeed = Math.NEGATIVE_INFINITY;
+		realAlpha = 1;
 		
 		clipRect = null;
 		setAlpha();

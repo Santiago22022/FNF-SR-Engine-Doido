@@ -16,6 +16,7 @@ import flixel.addons.effects.FlxTrail;
 import flixel.addons.ui.FlxUICheckBox;
 import flixel.addons.ui.FlxUINumericStepper;
 import flixel.group.FlxGroup;
+import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.math.FlxMath;
 import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
@@ -28,6 +29,7 @@ import flixel.util.FlxTimer;
 import objects.*;
 import objects.hud.*;
 import objects.note.*;
+import backend.utils.ObjectPool;
 import shaders.*;
 import states.PlayState;
 import states.editors.ChartingState;
@@ -58,6 +60,7 @@ class ChartTestSubState extends MusicBeatSubState
 	var strumlines:FlxTypedGroup<Strumline>;
 	var bfStrumline:Strumline;
 	var dadStrumline:Strumline;
+	var notePool:ObjectPool<Note>;
 	
 	var unspawnCount:Int = 0;
 	var unspawnNotes:Array<Note> = [];
@@ -165,7 +168,8 @@ class ChartTestSubState extends MusicBeatSubState
 		//Conductor.songPos = -Conductor.crochet * 5;
 		
 		unspawnNotes = [];
-		var checkUnspawnNotes:Array<Note> = ChartLoader.getChart(SONG);
+		notePool = new ObjectPool(Note, 0, null, function(note:Note) note.resetNote());
+		var checkUnspawnNotes:Array<Note> = ChartLoader.getChart(SONG, notePool);
 		
 		for(note in checkUnspawnNotes)
 		{

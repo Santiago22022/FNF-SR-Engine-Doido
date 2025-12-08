@@ -66,7 +66,7 @@ class Conductor
 		var lastChange:BPMChangeEvent = {
 			stepTime: 0,
 			songTime: 0,
-			bpm: 0
+			bpm: bpm
 		}
 		for(change in bpmChangeMap)
 		{
@@ -74,6 +74,9 @@ class Conductor
 				lastChange = change;
 		}
 
-		return lastChange.stepTime + Math.floor((songPos - lastChange.songTime) / stepCrochet);
+		var localStepCrochet = calcStep(lastChange.bpm);
+		if(localStepCrochet == 0) return lastChange.stepTime;
+
+		return lastChange.stepTime + Math.floor((songPos - lastChange.songTime) / localStepCrochet);
 	}
 }

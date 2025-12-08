@@ -6,6 +6,7 @@ import flixel.FlxSubState;
 import flixel.addons.ui.FlxUIState;
 import flixel.group.FlxGroup;
 import backend.song.Conductor;
+import backend.game.IStepHit;
 import crowplexus.iris.Iris;
 
 #if TOUCH_CONTROLS
@@ -19,6 +20,19 @@ import flixel.FlxSubState;
 
 class MusicBeatState extends FlxUIState
 {
+	private var stepHitables:Array<IStepHit> = [];
+
+	public function addStepHit(item:IStepHit)
+	{
+		if (!stepHitables.contains(item))
+			stepHitables.push(item);
+	}
+
+	public function removeStepHit(item:IStepHit)
+	{
+		stepHitables.remove(item);
+	}
+
 	#if TOUCH_CONTROLS
 	public var pad:DoidoPad;
 	#end
@@ -88,20 +102,10 @@ class MusicBeatState extends FlxUIState
 		if(curStep % 4 == 0)
 			beatHit();
 
-		function loopGroup(group:FlxGroup):Void
+		for (item in stepHitables)
 		{
-			if(group == null) return;
-			for(item in group.members)
-			{
-				if(item == null) continue;
-				if(Std.isOfType(item, FlxGroup))
-					loopGroup(cast item);
-	
-				if(item._stepHit != null)
-					item._stepHit(curStep);
-			}
+			item.stepHit(curStep);
 		}
-		loopGroup(this);
 	}
 
 	private function beatHit()
@@ -139,6 +143,19 @@ class MusicBeatState extends FlxUIState
 
 class MusicBeatSubState extends FlxSubState
 {
+	private var stepHitables:Array<IStepHit> = [];
+
+	public function addStepHit(item:IStepHit)
+	{
+		if (!stepHitables.contains(item))
+			stepHitables.push(item);
+	}
+
+	public function removeStepHit(item:IStepHit)
+	{
+		stepHitables.remove(item);
+	}
+
 	var subParent:FlxState;
 
 	#if TOUCH_CONTROLS
@@ -200,20 +217,10 @@ class MusicBeatSubState extends FlxSubState
 		if(curStep % 4 == 0)
 			beatHit();
 
-		function loopGroup(group:FlxGroup):Void
+		for (item in stepHitables)
 		{
-			if(group == null) return;
-			for(item in group.members)
-			{
-				if(item == null) continue;
-				if(Std.isOfType(item, FlxGroup))
-					loopGroup(cast item);
-	
-				if (item._stepHit != null)
-					item._stepHit(curStep);
-			}
+			item.stepHit(curStep);
 		}
-		loopGroup(this);
 	}
 
 	private function beatHit()
