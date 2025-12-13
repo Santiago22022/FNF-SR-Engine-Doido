@@ -10,6 +10,7 @@ import lime.utils.Assets;
 import openfl.display.BitmapData;
 import openfl.media.Sound;
 import states.PlayState;
+import backend.system.ModLoader;
 import tjson.TJSON;
 
 using StringTools;
@@ -18,6 +19,25 @@ class Paths
 {
 	public static var renderedGraphics:Map<String, FlxGraphic> = [];
 	public static var renderedSounds:Map<String, Sound> = [];
+
+	static inline function modAssetPath(filePath:String, ?library:String):String
+	{
+		#if desktop
+		var modPath = ModLoader.resolveAssetPath(filePath, library);
+		if(modPath != null)
+			return modPath;
+		#end
+		return getPath(filePath, library);
+	}
+
+	static inline function cacheKey(key:String, ?library:String):String
+		return (library != null && library.length > 0) ? '$library:$key' : key;
+
+	static inline function cacheParts(key:String):{ key:String, library:Null<String> }
+	{
+		var sep = key.indexOf(":");
+		return sep == -1 ? { key: key, library: null } : { key: key.substr(sep + 1), library: key.substr(0, sep) };
+	}
 
 	// idk
 	public static function getPath(key:String, ?library:String):String {
@@ -48,38 +68,43 @@ class Paths
 	
 	public static function fileExists(filePath:String, ?library:String):Bool
 		#if desktop
-		return sys.FileSystem.exists(getPath(filePath, library));
+		return sys.FileSystem.exists(modAssetPath(filePath, library));
 		#else
 		return openfl.Assets.exists(getPath(filePath, library));
 		#end
 	
 	public static function getSound(key:String, ?library:String):Sound
 	{
-		if(!renderedSounds.exists(key))
+		var cacheId = cacheKey(key, library);
+		if(!renderedSounds.exists(cacheId))
 		{
 			if(!fileExists('$key.ogg', library)) {
 				Logs.print('$key.ogg doesnt exist', WARNING);
 				key = 'sounds/beep';
+				library = null;
+				cacheId = cacheKey(key, library);
 			}
-			Logs.print('created new sound $key');
-			renderedSounds.set(key,
+			var soundPath = modAssetPath('$key.ogg', library);
+			Logs.print('created new sound $soundPath');
+			renderedSounds.set(cacheId,
 				#if desktop
-				Sound.fromFile(getPath('$key.ogg', library))
+				Sound.fromFile(soundPath)
 				#else
-				openfl.Assets.getSound(getPath('$key.ogg', library), false)
+				openfl.Assets.getSound(soundPath, false)
 				#end
 			);
 		}
-		return renderedSounds.get(key);
+		return renderedSounds.get(cacheId);
 	}
 	public static function getGraphic(key:String, ?library:String):FlxGraphic
 	{
 		if(key.endsWith('.png'))
 			key = key.substring(0, key.lastIndexOf('.png'));
-		var path = getPath('images/$key.png', library);
+		var cacheId = cacheKey(key, library);
+		var path = modAssetPath('images/$key.png', library);
 		if(fileExists('images/$key.png', library))
 		{
-			if(!renderedGraphics.exists(key))
+			if(!renderedGraphics.exists(cacheId))
 			{
 				#if desktop
 				var bitmap = BitmapData.fromFile(path);
@@ -87,15 +112,15 @@ class Paths
 				var bitmap = openfl.Assets.getBitmapData(path, false);
 				#end
 				
-				var newGraphic = FlxGraphic.fromBitmapData(bitmap, false, key, false);
-				Logs.print('created new image $key');
+				var newGraphic = FlxGraphic.fromBitmapData(bitmap, false, cacheId, false);
+				Logs.print('created new image $path');
 				
-				renderedGraphics.set(key, newGraphic);
+				renderedGraphics.set(cacheId, newGraphic);
 			}
 			
-			return renderedGraphics.get(key);
+			return renderedGraphics.get(cacheId);
 		}
-		Logs.print('$key.png doesnt exist, fuck', WARNING);
+		Logs.print('$path doesnt exist, fuck', WARNING);
 		return null;
 	}
 	
@@ -113,13 +138,14 @@ class Paths
 		var clearCount:Array<String> = [];
 		for(key => graphic in renderedGraphics)
 		{
-			if(dumpExclusions.contains(key + '.png')) continue;
+			var parts = cacheParts(key);
+			if(dumpExclusions.contains(parts.key + '.png')) continue;
+			var assetPath = getPath('images/${parts.key}.png', parts.library);
 
 			clearCount.push(key);
 			
-			renderedGraphics.remove(key);
-			if(openfl.Assets.cache.hasBitmapData(key))
-				openfl.Assets.cache.removeBitmapData(key);
+			if(openfl.Assets.cache.hasBitmapData(assetPath))
+				openfl.Assets.cache.removeBitmapData(assetPath);
 			
 			FlxG.bitmap.remove(graphic);
 			#if (flixel < "6.0.0")
@@ -127,6 +153,8 @@ class Paths
 			#end
 			graphic.destroy();
 		}
+		for(key in clearCount)
+			renderedGraphics.remove(key);
 
 		Logs.print('cleared $clearCount');
 		Logs.print('cleared ${clearCount.length} assets');
@@ -148,13 +176,18 @@ class Paths
 		}
 		
 		// sound clearing
+		var soundKeys:Array<String> = [];
 		for (key => sound in renderedSounds)
 		{
-			if(dumpExclusions.contains(key + '.ogg')) continue;
+			var parts = cacheParts(key);
+			if(dumpExclusions.contains(parts.key + '.ogg')) continue;
+			var assetPath = getPath('${parts.key}.ogg', parts.library);
 			
-			Assets.cache.clear(key);
-			renderedSounds.remove(key);
+			Assets.cache.clear(assetPath);
+			soundKeys.push(key);
 		}
+		for(key in soundKeys)
+			renderedSounds.remove(key);
 	}
 	
 	public static function music(key:String, ?library:String):Sound
@@ -187,14 +220,14 @@ class Paths
 		return getGraphic(key, library);
 	
 	public static function font(key:String, ?library:String):String
-		return getPath('fonts/$key', library);
+		return modAssetPath('fonts/$key', library);
 
 	public static function text(key:String, ?library:String):String
-		return Assets.getText(getPath('$key.txt', library)).trim();
+		return getContent('$key.txt', library).trim();
 
 	public static function getContent(filePath:String, ?library:String):String
 		#if desktop
-		return sys.io.File.getContent(getPath(filePath, library));
+		return sys.io.File.getContent(modAssetPath(filePath, library));
 		#else
 		return openfl.Assets.getText(getPath(filePath, library));
 		#end
@@ -221,19 +254,19 @@ class Paths
 	}
 
 	public static function video(key:String, ?library:String):String
-		return getPath('videos/$key.mp4', library);
+		return modAssetPath('videos/$key.mp4', library);
 	
 	// sparrow (.xml) sheets
 	public static function getSparrowAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromSparrow(getGraphic(key, library), getPath('images/$key.xml', library));
+		return FlxAtlasFrames.fromSparrow(getGraphic(key, library), getContent('images/$key.xml', library));
 	
 	// packer (.txt) sheets
 	public static function getPackerAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromSpriteSheetPacker(getGraphic(key, library), getPath('images/$key.txt', library));
+		return FlxAtlasFrames.fromSpriteSheetPacker(getGraphic(key, library), getContent('images/$key.txt', library));
 
 	// aseprite (.json) sheets
 	public static function getAsepriteAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromAseprite(getGraphic(key, library), getPath('images/$key.json', library));
+		return FlxAtlasFrames.fromAseprite(getGraphic(key, library), getContent('images/$key.json', library));
 
 	// sparrow (.xml) sheets but split into multiple graphics
 	public static function getMultiSparrowAtlas(baseSheet:String, otherSheets:Array<String>, ?library:String) {
@@ -261,7 +294,10 @@ class Paths
 		
 		try {
 			#if desktop
-			var rawList = sys.FileSystem.readDirectory(getPath(dir, library));
+			var dirPath = modAssetPath(dir, library);
+			if(!sys.FileSystem.exists(dirPath) || !sys.FileSystem.isDirectory(dirPath))
+				return swagList;
+			var rawList = sys.FileSystem.readDirectory(dirPath);
 			for(i in 0...rawList.length)
 			{
 				if(typeArr?.length > 0)
@@ -335,7 +371,7 @@ class Paths
 	public static function preloadGraphic(key:String, ?library:String)
 	{
 		// no point in preloading something already loaded duh
-		if(renderedGraphics.exists(key)) return;
+		if(renderedGraphics.exists(cacheKey(key, library))) return;
 
 		var what = new FlxSprite().loadGraphic(image(key, library));
 		FlxG.state.add(what);
@@ -343,7 +379,7 @@ class Paths
 	}
 	public static function preloadSound(key:String, ?library:String)
 	{
-		if(renderedSounds.exists(key)) return;
+		if(renderedSounds.exists(cacheKey(key, library))) return;
 
 		var what = new FlxSound().loadEmbedded(getSound(key, library), false, false);
 		what.play();

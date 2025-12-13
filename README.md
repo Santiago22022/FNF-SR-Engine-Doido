@@ -1,11 +1,11 @@
-# FNF: DOIDO ENGINE
+# FNF: SR ENGINE
 <p align="center">
 <img src="https://www.newgrounds.com/dump/draw/a7487bb1dcc15a499c00a5c5d4be5eb3">
 </p>
 
 ## Friday Night Funkin' Rewritten
 
-FNF: Doido Engine is a rewritte of FNF's code, while still being written in HaxeFlixel and aiming to be familiar to anyone knowledged in other FNF hardcoded engines.
+FNF: SR Engine is a rewritte of FNF's code, while still being written in HaxeFlixel and aiming to be familiar to anyone knowledged in other FNF hardcoded engines.
 
 ## Features
 
@@ -29,7 +29,7 @@ and more!
 ### Supports Windows, Linux and HTML5!
 
 ## How to use
-For information on how to Build the engine, as well as guides for how to use it, please check out the [FNF: Doido Engine Wiki](https://doidoteam.github.io/wiki/)!
+For information on how to Build the engine, as well as guides for how to use it, please check out the [FNF: SR Engine Wiki](https://doidoteam.github.io/wiki/)! 
 If you need help with anything, you can [join our Discord Server for support!](https://discord.gg/KVXf9Ygzu5)
 
 ### Libraries
@@ -37,7 +37,7 @@ To install the correct libraries, you can run your platform's respective script 
 
 ## Licenses
 
-The code in FNF': Doido Engine and it's core original assets are licensed under the Apache 2.0 license: (https://www.apache.org/licenses/LICENSE-2.0).
+The code in FNF': SR Engine and it's core original assets are licensed under the Apache 2.0 license: (https://www.apache.org/licenses/LICENSE-2.0).
 Some assets, including the "Friday Night Funkin'" name and logo, are property of The Funkin' Crew Inc. and all rights are reserved to it.
 Some other assets, such as test sprites and music, are used under permission from their creators, and so, have their rights reserved to whoever created them.
 
@@ -46,11 +46,11 @@ Some other assets, such as test sprites and music, are used under permission fro
 <img src="https://www.newgrounds.com/dump/draw/5657fbf528979526e5e7da27e30cd2a7">
 </p>
 
-### [DiogoTV](https://bsky.app/profile/diogotv.bsky.social) - Doido Engine's Owner and Main Coder
-### [teles](https://youtube.com/@telesfnf) - Doido Engine's Additional Coder
+### [DiogoTV](https://bsky.app/profile/diogotv.bsky.social) - SR Engine's Owner and Main Coder
+### [teles](https://youtube.com/@telesfnf) - SR Engine's Additional Coder
 
-### [GoldenFoxy](https://bsky.app/profile/goldenfoxy.bsky.social) - Main designer of Doido Engine's chart editor
-### [JulianoBeta](https://www.youtube.com/@prodjuyko) - Composed Doido Engine's offset menu music
+### [GoldenFoxy](https://bsky.app/profile/goldenfoxy.bsky.social) - Main designer of SR Engine's chart editor
+### [JulianoBeta](https://www.youtube.com/@prodjuyko) - Composed SR Engine's offset menu music
 ### [crowplexus](https://github.com/crowplexus) - Creator of HScript Iris
 ### [yoisabo](https://bsky.app/profile/yoisabo.bsky.social) - Chart Editor's Event Icons Artist
 ### [cocopuffs](https://x.com/cocopuffswow) - Mobile Button Artist

@@ -5,17 +5,17 @@ import flixel.math.FlxMath;
 class Timings
 {
 	public static var timingsArray:Array<Array<Dynamic>> = [
-		["sick",	45,		1],
-		["good",	90,		0.75],
-		["bad",		135,	0.25],
-		["shit",	160,	-1.0],
-		["miss",	180,	-1.75],
+		["sick",	80,		1],
+		["good",	150,	0.75],
+		["bad",		225,	0.25],
+		["shit",	275,	-1.0],
+		["miss",	325,	-1.75],
 	];
 	public static var holdTimings:Array<Dynamic> = [
-		[0.85, timingsArray[0][1]], // sick
-		[0.60, timingsArray[1][1]], // good
-		[0.35, timingsArray[2][1]], // bad
-		[0.20, timingsArray[3][1]], // shit
+		[0.70, timingsArray[0][1]], // sick
+		[0.50, timingsArray[1][1]], // good
+		[0.30, timingsArray[2][1]], // bad
+		[0.15, timingsArray[3][1]], // shit
 	];
 	
 	public static var minTiming:Float = getTimings("miss")[1];
@@ -94,11 +94,18 @@ class Timings
 
 	public static function updateAccuracy()
 	{
+		if(accHit <= 0)
+		{
+			accuracy = 0;
+			return;
+		}
+
 		var rawAccuracy:Float = (accJudge / accHit) * 100;
 
-		accuracy = FlxMath.roundDecimal(rawAccuracy, 2);
+		if(Math.isNaN(rawAccuracy) || !Math.isFinite(rawAccuracy))
+			rawAccuracy = 0;
 
-		accuracy = FlxMath.bound(accuracy, 0, 100);
+		accuracy = FlxMath.bound(FlxMath.roundDecimal(rawAccuracy, 2), 0, 100);
 	}
 
 	public static function getRank(?accuracy:Float, ?misses:Int, inGame:Bool = true, hasPlus:Bool = true):String

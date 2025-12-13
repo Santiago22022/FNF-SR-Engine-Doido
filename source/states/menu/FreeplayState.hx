@@ -54,7 +54,9 @@ class FreeplayState extends MusicBeatState
 		super.create();
 		CoolUtil.playMusic("freakyMenu");
 
+		#if !html5
 		DiscordIO.changePresence("Freeplay - Choosin' a track");
+		#end
 
 		bg = new FlxSprite().loadGraphic(Paths.image('menu/backgrounds/menuDesat'));
 		bg.scale.set(1.2,1.2); bg.updateHitbox();

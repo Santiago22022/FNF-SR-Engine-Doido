@@ -281,7 +281,7 @@ class OptionsSubState extends MusicBeatSubState
                         if(selec.label == "Window Size")
                             SaveData.updateWindowSize();
                         #if TOUCH_CONTROLS
-                        else if(selec.label == "Button Opacity")
+                        else if(selec.label == "Button Opacity" && pad != null)
                             pad.togglePad(true);
                         #end
                         // only happens when youre not holding the selector

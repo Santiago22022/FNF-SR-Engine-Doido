@@ -29,7 +29,7 @@ class Main extends Sprite
 	public static var fpsCounter:FPSCounter;
 
 	// Use these to customize your mod further!
-	public static final savePath:String = "DiogoTV/DoidoEngine";
+	public static final savePath:String = "DiogoTV/SREngine";
 	public static var gFont:String = Paths.font("vcr.ttf");
 
 	public function new()
@@ -41,7 +41,11 @@ class Main extends Sprite
 		var ws:Array<String> = SaveData.displaySettings.get("Window Size")[0].split("x");
 		var windowSize:Array<Int> = [Std.parseInt(ws[0]),Std.parseInt(ws[1])];
 
-		addChild(new FlxGame(windowSize[0], windowSize[1], Init, 120, 120, true));
+		#if html5
+		addChild(new FlxGame(windowSize[0], windowSize[1], Init, 60, 60, true));
+		#else
+		addChild(new FlxGame(windowSize[0], windowSize[1], Init, 75, 75, true));
+		#end
 
 		#if android
 		FlxG.android.preventDefaultKeys = [BACK];
@@ -102,7 +106,7 @@ class Main extends Sprite
 		var stackTraceString = exception + StringTools.trim(CallStack.toString(CallStack.exceptionStack(true)));
 		var dateNow:String = Date.now().toString().replace(" ", "_").replace(":", "'");
 
-		path = 'crash/DoidoEngine_${dateNow}.txt';
+		path = 'crash/SREngine_${dateNow}.txt';
 
 		#if sys
 		if (!FileSystem.exists("crash/"))
@@ -145,7 +149,10 @@ class Main extends Sprite
 		};
 
 		if(skipTrans)
-			return trans.finishCallback();
+		{
+			trans.finishCallback();
+			return;
+		}
 		
 		//FlxG.state.openSubState(trans);
 		if(activeState != null)
@@ -163,9 +170,14 @@ class Main extends Sprite
 		skipTrans = ohreally;
 	}
 
-	public static function changeFramerate(rawFps:Float = 120)
+	public static function changeFramerate(rawFps:Float = 75)
 	{
+		if(Math.isNaN(rawFps) || !Math.isFinite(rawFps))
+			rawFps = 75;
+
 		var newFps:Int = Math.floor(rawFps);
+		if(newFps < 1) newFps = 1;
+		if(newFps > 360) newFps = 360;
 
 		if(newFps > FlxG.updateFramerate)
 		{

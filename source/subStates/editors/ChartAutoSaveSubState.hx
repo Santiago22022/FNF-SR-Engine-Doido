@@ -14,6 +14,7 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxSave;
 import objects.hud.HealthIcon;
 import states.editors.ChartingState;
+import StringTools;
 
 typedef AutoSaveData = {
 	var SONG:SwagSong;
@@ -29,16 +30,19 @@ class ChartAutoSaveSubState extends MusicBeatSubState
 	public static function load()
 	{
 		saveFile = new FlxSave();
-		saveFile.bind("autosave");
-		
-		if (saveFile.data.autoSaveArray == null)
-			saveFile.data.autoSaveArray = autoSaveArray;
-		
-		autoSaveArray = saveFile.data.autoSaveArray;
+		if(!saveFile.bind("autosave"))
+		{
+			autoSaveArray = [];
+			return;
+		}
+
+		autoSaveArray = sanitizeAutoSaves(saveFile.data.autoSaveArray);
 		save();
 	}
 	public static function save()
 	{
+		if(saveFile == null || saveFile.data == null)
+			return;
 		saveFile.data.autoSaveArray = autoSaveArray;
 		saveFile.flush();
 	}
@@ -61,13 +65,23 @@ class ChartAutoSaveSubState extends MusicBeatSubState
 		guideTxt.y = FlxG.height - guideTxt.height - 8;
 		add(guideTxt);
 		
-		var count:Int = autoSaveArray.length - 1;
-		for(autosave in autoSaveArray)
+		var entries = autoSaveArray.copy();
+		entries.reverse(); // newest on top
+		var count:Int = 0;
+		for(autosave in entries)
 		{
 			var dumbass = new AutoSaveWindow(autosave, count);
 			add(dumbass);
 			
-			count--;
+			count++;
+		}
+
+		if(entries.length == 0)
+		{
+			var emptyTxt = new FlxText(0, 0, 0, "No autosaves yet");
+			emptyTxt.setFormat(Main.gFont, 24, 0xFFFFFFFF, CENTER);
+			emptyTxt.screenCenter();
+			add(emptyTxt);
 		}
 		
 		bg.alpha = 0;
@@ -87,6 +101,8 @@ class ChartAutoSaveSubState extends MusicBeatSubState
 	
 	public static function addSave(SONG:SwagSong, EVENTS:EventSong, diff:String)
 	{
+		autoSaveArray = sanitizeAutoSaves(autoSaveArray);
+
 		// not sure why, but autosave acts weird if i dont do this
 		var songClone = {
 			song: SONG.song,
@@ -132,15 +148,72 @@ class ChartAutoSaveSubState extends MusicBeatSubState
 		}
 		
 		// adding it (max is 5 so watch out!!)
-		autoSaveArray.push({
+		var newSave:AutoSaveData = {
 			SONG: songClone,
 			EVENTS: eventsClone,
 			diff: diff,
-			date: Date.now().toString(),
-		});
-		if (autoSaveArray.length > 5)
-			autoSaveArray.remove(autoSaveArray[0]);
+			date: formatDate(),
+		};
+
+		// remove previous save for same song/diff to keep newest
+		var keysToRemove:Array<AutoSaveData> = [];
+		for(entry in autoSaveArray)
+		{
+			if(entry.SONG != null && entry.SONG.song == newSave.SONG.song && entry.diff == newSave.diff)
+				keysToRemove.push(entry);
+		}
+		for(entry in keysToRemove)
+			autoSaveArray.remove(entry);
+
+		autoSaveArray.push(newSave);
+
+		while (autoSaveArray.length > 5)
+			autoSaveArray.shift();
+
 		save();
+	}
+
+	static function sanitizeAutoSaves(raw:Dynamic):Array<AutoSaveData>
+	{
+		var list:Array<AutoSaveData> = [];
+		if(raw != null && Std.isOfType(raw, Array))
+		{
+			for(entry in cast(raw, Array<Dynamic>))
+			{
+				if(entry == null || entry.SONG == null || entry.SONG.song == null)
+					continue;
+				var safeDate:String = Std.string(entry.date);
+				if(safeDate == null || StringTools.trim(safeDate) == "")
+					safeDate = formatDate();
+
+				var safeDiff:String = Std.string(entry.diff);
+				if(safeDiff == null || StringTools.trim(safeDiff) == "")
+					safeDiff = "Normal";
+
+				var safeEvents:EventSong = entry.EVENTS != null ? cast entry.EVENTS : SongData.defaultSongEvents();
+
+				list.push({
+					SONG: cast entry.SONG,
+					EVENTS: safeEvents,
+					diff: safeDiff,
+					date: safeDate
+				});
+			}
+		}
+		while (list.length > 5)
+			list.shift();
+		return list;
+	}
+
+	static inline function formatDate():String
+	{
+		var now = Date.now();
+		var y = now.getFullYear();
+		var m = StringTools.lpad(Std.string(now.getMonth() + 1), "0", 2);
+		var d = StringTools.lpad(Std.string(now.getDate()), "0", 2);
+		var h = StringTools.lpad(Std.string(now.getHours()), "0", 2);
+		var min = StringTools.lpad(Std.string(now.getMinutes()), "0", 2);
+		return '$y-$m-$d $h:$min';
 	}
 }
 class AutoSaveWindow extends FlxGroup

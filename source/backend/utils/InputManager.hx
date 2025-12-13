@@ -1,6 +1,7 @@
 package backend.utils;
 
 import backend.game.Controls;
+import flixel.FlxG;
 #if TOUCH_CONTROLS
 import objects.mobile.Hitbox;
 import objects.mobile.MobileInput.MobileInputType;
@@ -8,12 +9,16 @@ import objects.mobile.MobileInput.MobileInputType;
 
 class InputManager
 {
+	static inline var DEFAULT_HOLD_MS:Int = 38; // ~2 frames at 60fps, scaled by FPS
+
 	public var pressed:Array<Bool> = [false, false, false, false];
 	public var justPressed:Array<Bool> = [false, false, false, false];
 	public var released:Array<Bool> = [false, false, false, false];
 	// buffer de unos frames para no perder taps cuando hay stutter
-	public var holdFrames:Int = 1;
+	// set to -1 for automatic scaling based on framerate
+	public var holdFrames:Int = -1;
 	var justPressedBuffer:Array<Int> = [0, 0, 0, 0];
+	var freshJP:Array<Bool> = [false, false, false, false];
 
 	inline function setState(arr:Array<Bool>, idx:Int, value:Bool)
 	{
@@ -24,30 +29,35 @@ class InputManager
     private var hitbox:Hitbox;
     #end
 
+    private var focusHandlerAdded:Bool = false;
+
 	public function new(#if TOUCH_CONTROLS hitbox:Hitbox #end)
 	{
         #if TOUCH_CONTROLS
         this.hitbox = hitbox;
         #end
+		FlxG.signals.focusLost.add(clearStates);
+		FlxG.signals.focusGained.add(clearStates);
+		focusHandlerAdded = true;
 	}
 
 	public function update():Void
 	{
+		var hold:Int = computeHoldFrames();
+
 		setState(pressed, 0, Controls.pressed(LEFT));
 		setState(pressed, 1, Controls.pressed(DOWN));
 		setState(pressed, 2, Controls.pressed(UP));
 		setState(pressed, 3, Controls.pressed(RIGHT));
 
-		var freshJP:Array<Bool> = [
-			Controls.justPressed(LEFT),
-			Controls.justPressed(DOWN),
-			Controls.justPressed(UP),
-			Controls.justPressed(RIGHT)
-		];
+		freshJP[0] = Controls.justPressed(LEFT);
+		freshJP[1] = Controls.justPressed(DOWN);
+		freshJP[2] = Controls.justPressed(UP);
+		freshJP[3] = Controls.justPressed(RIGHT);
 		for(i in 0...freshJP.length)
 		{
 			if(freshJP[i])
-				justPressedBuffer[i] = holdFrames;
+				justPressedBuffer[i] = hold;
 
 			if(justPressedBuffer[i] > 0)
 			{
@@ -72,7 +82,7 @@ class InputManager
 
                 if(hitbox.checkButton(CoolUtil.directions[i], JUST_PRESSED))
                 {
-                    justPressedBuffer[i] = holdFrames;
+                    justPressedBuffer[i] = hold;
                     justPressed[i] = true;
                 }
 
@@ -81,5 +91,46 @@ class InputManager
             }
         }
 		#end
+	}
+
+	public function clearStates():Void
+	{
+		for(i in 0...pressed.length)
+		{
+			pressed[i] = false;
+			justPressed[i] = false;
+			released[i] = false;
+			justPressedBuffer[i] = 0;
+		}
+	}
+
+	public function destroy():Void
+	{
+		if(focusHandlerAdded)
+		{
+			FlxG.signals.focusLost.remove(clearStates);
+			FlxG.signals.focusGained.remove(clearStates);
+			focusHandlerAdded = false;
+		}
+	}
+
+	inline function computeHoldFrames():Int
+	{
+		if(holdFrames >= 0)
+		{
+			var manual = holdFrames;
+			if(manual < 0) manual = 0;
+			if(manual > 12) manual = 12;
+			return manual;
+		}
+
+		var fps:Float = FlxG.updateFramerate;
+		if(fps <= 0) fps = 60;
+
+		var frameMs:Float = 1000 / fps;
+		var frames:Int = Math.ceil(DEFAULT_HOLD_MS / frameMs);
+		if(frames < 1) frames = 1;
+		if(frames > 6) frames = 6;
+		return frames;
 	}
 }

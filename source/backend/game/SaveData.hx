@@ -67,12 +67,12 @@ class SaveData
 			"Whether to use Discord's game activity.",
 		],
 		"Shaders" => [
-			true,
+			#if html5 false #else true #end,
 			CHECKMARK,
 			"Fancy graphical effects. Disable this if you get GPU related crashes."
 		],
 		"Low Quality" => [
-			false,
+			#if html5 true #else false #end,
 			CHECKMARK,
 			"Disables extra assets that might make very low end computers lag."
 		],
@@ -132,7 +132,7 @@ class SaveData
 			"Whether a splash appears when you completely press a hold note.\nDisable if it distracts you. (Only works if Note Splashes is enabled)."
 		],
 		"Antialiasing" => [
-			true,
+			#if html5 false #else true #end,
 			CHECKMARK,
 			"Disabling it might increase the fps at the cost of smoother sprites"
 		],
@@ -223,6 +223,7 @@ class SaveData
 		Highscore.load();
 		subStates.editors.ChartAutoSaveSubState.load(); // uhhh
 		updateWindowSize();
+		update();
 	}
 	
 	public static function load()
@@ -232,43 +233,16 @@ class SaveData
 		if(saveSettings.data.muted != null)
 			FlxG.sound.muted  = saveSettings.data.muted;
 
-		if(saveSettings.data.settings == null)
-		{
-			for(key => values in displaySettings)
-				data[key] = values[0];
-			
-			saveSettings.data.settings = data;
-		}
+		var storedSettings:Dynamic = saveSettings.data.settings;
+		if(storedSettings != null && Reflect.hasField(storedSettings, "keys"))
+			data = cast storedSettings;
 		else
-		{
-			var freeze:Null<Bool> = saveSettings.data.settings.get("Unfocus Freeze");
-			if(freeze != null) {
-				saveSettings.data.settings.set("Unfocus Pause", freeze);
-				saveSettings.data.settings.remove("Unfocus Freeze");
-			}
-		}
-		
-		if(Lambda.count(displaySettings) != Lambda.count(saveSettings.data.settings)) {
-			data = saveSettings.data.settings;
-			
-			for(key => values in displaySettings) {
-				if(data[key] == null)
-					data[key] = values[0];
-			}
+			data = new Map<String, Dynamic>();
 
-			for(key => values in data) {
-				if(displaySettings[key] == null)
-					data.remove(key);
-			}
-
-			saveSettings.data.settings = data;
-		}
-		
-		for(hitsound in Paths.readDir('sounds/hitsounds', [".ogg"], true))
-			if(!displaySettings.get("Hitsounds")[3].contains(hitsound))
-				displaySettings.get("Hitsounds")[3].insert(1, hitsound);
-		
-		data = saveSettings.data.settings;
+		migrateLegacySettings();
+		syncSettingsWithDefaults();
+		addDynamicOptions();
+		sanitizeSettings();
 		save();
 	}
 	
@@ -299,15 +273,144 @@ class SaveData
 	public static function updateWindowSize()
 	{
 		#if desktop
+		if(FlxG.stage == null || FlxG.stage.window == null) return;
 		if(FlxG.fullscreen) return;
-		var ws:Array<String> = data.get("Window Size").split("x");
-        	var windowSize:Array<Int> = [Std.parseInt(ws[0]),Std.parseInt(ws[1])];
-        	FlxG.stage.window.width = windowSize[0];
-        	FlxG.stage.window.height= windowSize[1];
+		var savedSize:String = Std.string(data.get("Window Size"));
+		var ws:Array<String> = savedSize.split("x");
+		if(ws.length < 2)
+			ws = Std.string(displaySettings.get("Window Size")[0]).split("x");
+        var windowSize:Array<Int> = [Std.parseInt(ws[0]),Std.parseInt(ws[1])];
+		var defaultSize:Array<String> = Std.string(displaySettings.get("Window Size")[0]).split("x");
+		for(i in 0...windowSize.length)
+		{
+			if(Math.isNaN(windowSize[i]) || windowSize[i] <= 0)
+				windowSize[i] = Std.parseInt(defaultSize[i]);
+		}
+        FlxG.stage.window.width = windowSize[0];
+        FlxG.stage.window.height= windowSize[1];
 		
 		// centering the window
 		FlxG.stage.window.x = Math.floor(Capabilities.screenResolutionX / 2 - windowSize[0] / 2);
 		FlxG.stage.window.y = Math.floor(Capabilities.screenResolutionY / 2 - (windowSize[1] + 16) / 2);
 		#end
+	}
+
+	static function migrateLegacySettings()
+	{
+		var freeze:Null<Bool> = data.get("Unfocus Freeze");
+		if(freeze != null) {
+			data.set("Unfocus Pause", freeze);
+			data.remove("Unfocus Freeze");
+		}
+	}
+
+	static function syncSettingsWithDefaults()
+	{
+		for(key => values in displaySettings)
+		{
+			if(!data.exists(key))
+				data.set(key, values[0]);
+		}
+
+		var keysToRemove:Array<String> = [];
+		for(key in data.keys())
+			if(!displaySettings.exists(key))
+				keysToRemove.push(key);
+		for(key in keysToRemove)
+			data.remove(key);
+
+		saveSettings.data.settings = data;
+	}
+
+	static function addDynamicOptions()
+	{
+		var hitsoundsSetting = displaySettings.get("Hitsounds");
+		if(hitsoundsSetting == null || hitsoundsSetting.length < 4)
+			return;
+
+		var list:Array<Dynamic> = hitsoundsSetting[3];
+		for(hitsound in Paths.readDir('sounds/hitsounds', [".ogg"], true))
+			if(!list.contains(hitsound))
+				list.insert(1, hitsound);
+	}
+
+	static function sanitizeSettings()
+	{
+		for(key => values in displaySettings)
+		{
+			var current:Dynamic = data.get(key);
+			var fixed:Dynamic = sanitizeValue(key, current, values);
+			if(current != fixed)
+				data.set(key, fixed);
+		}
+	}
+
+	static function sanitizeValue(key:String, current:Dynamic, values:Array<Dynamic>):Dynamic
+	{
+		var defaultValue:Dynamic = values[0];
+		var type:SettingType = values[1];
+		if(current == null)
+			return defaultValue;
+
+		switch(type)
+		{
+			case CHECKMARK:
+				return toBool(current, defaultValue == true);
+			case SELECTOR:
+				if(values.length < 4 || values[3] == null)
+					return current;
+
+				var options:Array<Dynamic> = values[3];
+				var rangeMin = options[0];
+				var rangeMax = options[1];
+				var hasRange:Bool = options.length == 2 && isNumber(rangeMin) && isNumber(rangeMax);
+
+				if(hasRange)
+					return clampInt(current, rangeMin, rangeMax);
+
+				var idx = options.indexOf(current);
+				if(idx == -1)
+				{
+					var matched:Dynamic = matchOption(options, current);
+					return matched == null ? defaultValue : matched;
+				}
+				return options[idx];
+		}
+
+		return defaultValue;
+	}
+
+	inline static function clampInt(value:Dynamic, min:Int, max:Int):Int
+	{
+		var parsed:Float = Std.parseFloat(Std.string(value));
+		if(Math.isNaN(parsed))
+			parsed = min;
+		var num:Int = Std.int(parsed);
+		if(num < min) num = min;
+		if(num > max) num = max;
+		return num;
+	}
+
+	static inline function isNumber(value:Dynamic):Bool
+		return Std.isOfType(value, Int) || Std.isOfType(value, Float);
+
+	static function toBool(value:Dynamic, fallback:Bool):Bool
+	{
+		if(Std.isOfType(value, Bool))
+			return value;
+
+		var lower = Std.string(value).toLowerCase();
+		if(lower == "true") return true;
+		if(lower == "false") return false;
+		return fallback;
+	}
+
+	static function matchOption(options:Array<Dynamic>, current:Dynamic):Dynamic
+	{
+		var curStr = Std.string(current).toLowerCase();
+		for(opt in options)
+			if(Std.string(opt).toLowerCase() == curStr)
+				return opt;
+		return null;
 	}
 }

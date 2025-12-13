@@ -3,7 +3,7 @@
 
 	<!-- _________________________ Application Settings _________________________ -->
 
-	<app title="FNF: Doido Engine" file="DoidoEngine" packageName="com.diogotv.doidoengine" package="com.diogotv.doidoengine" main="Main" version="3.4.1" company="DiogoTV" />
+	<app title="FNF: SR Engine" file="SREngine" packageName="com.santiago.srengine" package="com.santiago.srengine" main="Main" version="0.0.1" company="santiiaago" />
 	
 	<!--The flixel preloader is not accurate in Chrome. You can use it regularly if you embed the swf into a html file
 		or you can set the actual size of your file manually at "FlxPreloaderBase-onUpdate-bytesTotal"-->
@@ -48,6 +48,8 @@
 	<assets path="assets" /> <!-- if="VIDEOS_ALLOWED" /> -->
 	<!--<assets path="assets" exclude="videos" unless="VIDEOS_ALLOWED" />-->
 	<assets path="art/mobile" rename="assets/images/mobile" if="TOUCH_CONTROLS" />
+	<!-- Avoid loading placeholder/readme text files in web preloader -->
+	<assets path="assets" exclude="**/readme.txt|**/README.txt" />
 
 	<!-- RENAME UNDERSCORE FOLDERS -->
 	<section if="RENAME_UNDERSCORE">

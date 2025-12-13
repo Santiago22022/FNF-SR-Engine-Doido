@@ -59,15 +59,16 @@ class CreditsState extends MusicBeatState
 		*	Modify these to add your own credits!!
 		*/
 		final nikoo:Bool = (FlxG.random.bool(1));
-		final specialPeople = 'Anakim, ArturYoshi, BeastlyChip♧, Bnyu, Evandro, NxtVithor, Pi3tr0, Raphalitos, ZieroSama';
-		final specialCoders = 'ShadzXD, pisayesiwsi, crowplexus, Lasystuff, Gazozoz, Joalor64GH, LeonGamerPS1';
+		final specialPeople = 'All corders, testers and supporters of Doido Engine';
+		final specialCoders = 'Santiiaago';
 		// yes, this implies coders aren't people :D
 		
 		// btw you dont need to credit everyone here on your mod
 		// just credit doido engine as a whole and we're good
-		addCategory("Doido Engine's Crew");
-		addCredit('DiogoTV', 			'diogotv', 	 0xFFC385FF, "Doido Engine's Owner and Main Coder", 				'https://bsky.app/profile/diogotv.bsky.social');
-		addCredit('teles', 				'teles', 	 0xFFFF95AC, "Doido Engine's Additional Coder",					'https://youtube.com/@telesfnf');
+		addCategory("SR Engine Crew");
+        addCredit('Santiiaago', 	    'santiiaago', 0xFFC385FF, "SR Engine Owner and Main Coder", 				'');
+		addCredit('DiogoTV', 			'diogotv', 	 0xFFC385FF, "Doido Engine Owner and Main Coder", 				'https://bsky.app/profile/diogotv.bsky.social');
+		addCredit('teles', 				'teles', 	 0xFFFF95AC, "Doido Engine Additional Coder",					'https://youtube.com/@telesfnf');
 		addCredit('GoldenFoxy',			'anna', 	 0xFFFFE100, "Main designer of Doido Engine's chart editor",		'https://bsky.app/profile/goldenfoxy.bsky.social');
 		addCredit('JulianoBeta', 		'juyko', 	 0xFF0BA5FF, "Composed Doido Engine's offset menu music",			'https://www.youtube.com/@prodjuyko');
 		addCredit('crowplexus',			'crowplexus',0xFF313538, "Creator of HScript Iris",							'https://github.com/crowplexus/hscript-iris');

@@ -31,7 +31,9 @@ class MainMenuState extends MusicBeatState
 		super.create();
 		CoolUtil.playMusic("freakyMenu");
 		
+		#if !html5
 		DiscordIO.changePresence("In the Main Menu");
+		#end
 
 		bg = new FlxSprite().loadGraphic(Paths.image('menu/backgrounds/menuBG'));
 		bg.scale.set(1.2,1.2);
@@ -44,7 +46,7 @@ class MainMenuState extends MusicBeatState
 		bgMag.updateHitbox();
 		bgMag.visible = false;
 		add(bgMag);
-		
+
 		if(FlxG.random.bool(0.001))
 		{
 			if(Paths.fileExists('images/herobrine.png'))
@@ -106,15 +108,15 @@ class MainMenuState extends MusicBeatState
 			item.ID = i;
 		}
 		
-		var doidoSplash:String = 'Doido Engine ${lime.app.Application.current.meta.get('version')}';
+		var engineSplash:String = 'SR Engine ${lime.app.Application.current.meta.get('version')}';
 		var funkySplash:String = 'Friday Night Funkin\' Rewritten';
 
-		var splashTxt = new FlxText(4, 0, 0, '$doidoSplash\n$funkySplash');
+		var splashTxt = new FlxText(4, 0, 0, '$engineSplash\n$funkySplash');
 		splashTxt.setFormat(Main.gFont, 18, 0xFFFFFFFF, LEFT);
 		splashTxt.setBorderStyle(OUTLINE, 0xFF000000, 1.5);
 		splashTxt.y = FlxG.height - splashTxt.height - 4;
 		add(splashTxt);
-
+		
 		changeSelection();
 		bg.y = bgPosY;
 

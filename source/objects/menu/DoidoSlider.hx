@@ -55,33 +55,25 @@ class DoidoSlider extends FlxSpriteGroup
     }
     
     public var isPressed:Bool = false;
-    // cache mouse positions per update to avoid repeated calls
-    var lastMouseX:Float = 0;
-    var lastMouseJustPressed:Bool = false;
-    var lastMouseJustReleased:Bool = false;
 
     override function update(elapsed:Float)
     {
         super.update(elapsed);
-        // cache mouse states
-        lastMouseJustPressed = FlxG.mouse.justPressed;
-        lastMouseJustReleased = FlxG.mouse.justReleased;
-        lastMouseX = #if (flixel >= "5.9.0") FlxG.mouse.getViewPosition(cameras[0]).x #else FlxG.mouse.getPositionInCameraView(cameras[0]).x #end;
-
-        if(lastMouseJustPressed)
-        {
+        if(FlxG.mouse.justPressed)
             if(FlxG.mouse.overlaps(hitbox, cameras[0])
             || FlxG.mouse.overlaps(handle, cameras[0]))
                 isPressed = true;
-        }
         
-        if(lastMouseJustReleased)
+        if(FlxG.mouse.justReleased)
             isPressed = false;
 
         // moving the handle
         if(isPressed)
         {
-            handle.x = lastMouseX;
+            var handleX:Float = #if (flixel >= "5.9.0")
+            FlxG.mouse.getViewPosition(cameras[0]).x; #else
+            FlxG.mouse.getPositionInCameraView(cameras[0]).x; #end
+            handle.x = handleX;
         }
         
         // capping the handle

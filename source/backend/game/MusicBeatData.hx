@@ -20,6 +20,7 @@ import flixel.FlxSubState;
 
 class MusicBeatState extends FlxUIState
 {
+	static inline var STEP_LOOP_CAP:Int = 2048;
 	private var stepHitables:Array<IStepHit> = [];
 
 	public function addStepHit(item:IStepHit)
@@ -86,8 +87,18 @@ class MusicBeatState extends FlxUIState
 	{
 		_curStep = Conductor.calcStateStep();
 
-		while(_curStep != curStep)
+		var loops:Int = 0;
+		while(_curStep != curStep && loops < STEP_LOOP_CAP)
+		{
 			stepHit();
+			loops++;
+		}
+
+		if(loops >= STEP_LOOP_CAP && _curStep != curStep)
+		{
+			curStep = _curStep;
+			curBeat = Math.floor(curStep / 4);
+		}
 	}
 
 	private function stepHit()
@@ -118,6 +129,11 @@ class MusicBeatState extends FlxUIState
 	function createPad(mode:String = "blank", ?cameras:Array<FlxCamera>)
 	{
 		remove(pad);
+		if(!Controls.shouldUseTouch())
+		{
+			pad = null;
+			return;
+		}
 		pad = new DoidoPad(mode);
 
 		if(mode != "blank") {
@@ -129,20 +145,31 @@ class MusicBeatState extends FlxUIState
 	}
 
 	override function openSubState(SubState:FlxSubState) {
-		if(!(SubState is GameTransition))
+		if(!(SubState is GameTransition) && pad != null)
 			pad.togglePad(false);
 		super.openSubState(SubState);
 	}
 
 	override function closeSubState() {
-		pad.togglePad(true);
+		if(pad != null)
+			pad.togglePad(true);
 		super.closeSubState();
 	}
 	#end
+
+	override function destroy()
+	{
+		stepHitables = [];
+		#if TOUCH_CONTROLS
+		pad = null;
+		#end
+		super.destroy();
+	}
 }
 
 class MusicBeatSubState extends FlxSubState
 {
+	static inline var STEP_LOOP_CAP:Int = 2048;
 	private var stepHitables:Array<IStepHit> = [];
 
 	public function addStepHit(item:IStepHit)
@@ -201,8 +228,18 @@ class MusicBeatSubState extends FlxSubState
 	{
 		_curStep = Conductor.calcStateStep();
 
-		while(_curStep != curStep)
+		var loops:Int = 0;
+		while(_curStep != curStep && loops < STEP_LOOP_CAP)
+		{
 			stepHit();
+			loops++;
+		}
+
+		if(loops >= STEP_LOOP_CAP && _curStep != curStep)
+		{
+			curStep = _curStep;
+			curBeat = Math.floor(curStep / 4);
+		}
 	}
 
 	private function stepHit()
@@ -233,6 +270,11 @@ class MusicBeatSubState extends FlxSubState
 	function createPad(mode:String = "blank", ?cameras:Array<FlxCamera>)
 	{
 		remove(pad);
+		if(!Controls.shouldUseTouch())
+		{
+			pad = null;
+			return;
+		}
 		pad = new DoidoPad(mode);
 
 		if(mode != "blank") {
@@ -243,5 +285,13 @@ class MusicBeatSubState extends FlxSubState
 		}
 	}
 	#end
-}
 
+	override function destroy()
+	{
+		stepHitables = [];
+		#if TOUCH_CONTROLS
+		pad = null;
+		#end
+		super.destroy();
+	}
+}
