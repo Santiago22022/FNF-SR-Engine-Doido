@@ -130,8 +130,8 @@ class ControlsSubState extends MusicBeatSubState
             backspaceTxt.y = FlxG.height - backspaceTxt.height - 10;
 
         #if TOUCH_CONTROLS
-		createPad("back", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
-		#end
+        createPad("menu", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
+        #end
     }
 
     var allBinds:Array<String> = Controls.changeableControls;

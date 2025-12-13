@@ -191,6 +191,12 @@ class SaveData
 			"Decides the transparency of the playing Hitboxes.",
 			[0, 10]
 		],
+		"Hitbox Style" => [
+			"BASE",
+			SELECTOR,
+			"Choose the look of the gameplay hitbox buttons.",
+			["BASE", "DOIDO", "PIXEL"]
+		],
 		/*
 		*
 		* EXTRA STUFF

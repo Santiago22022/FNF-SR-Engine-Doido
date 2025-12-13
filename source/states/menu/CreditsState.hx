@@ -143,7 +143,7 @@ class CreditsState extends MusicBeatState
 		changeSelection();
 
 		#if TOUCH_CONTROLS
-		createPad("back");
+		createPad("menu");
 		#end
 	}
 

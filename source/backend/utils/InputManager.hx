@@ -4,12 +4,11 @@ import backend.game.Controls;
 import flixel.FlxG;
 #if TOUCH_CONTROLS
 import objects.mobile.Hitbox;
-import objects.mobile.MobileInput.MobileInputType;
 #end
 
 class InputManager
 {
-	static inline var DEFAULT_HOLD_MS:Int = 38; // ~2 frames at 60fps, scaled by FPS
+	static inline var DEFAULT_HOLD_MS:Int = 55; // ~3 frames at 60fps, scaled by FPS
 
 	public var pressed:Array<Bool> = [false, false, false, false];
 	public var justPressed:Array<Bool> = [false, false, false, false];
@@ -74,7 +73,7 @@ class InputManager
 		setState(released, 3, Controls.released(RIGHT));
 
 		#if TOUCH_CONTROLS
-        if (hitbox != null)
+        if (hitbox != null && Controls.canTouch)
         {
             for(i in 0...CoolUtil.directions.length) {
                 if(hitbox.checkButton(CoolUtil.directions[i], PRESSED))

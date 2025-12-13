@@ -12,10 +12,17 @@ import sys.io.File;
 
 class ModLoader
 {
+	#if sys
 	public static var modRoot:String = "mods";
 	public static var sharedFolders:Array<String> = [];
 	public static var extraRoots:Array<String> = [];
 	public static var ignoredEntries:Array<String> = [".git", ".svn", ".idea", ".vscode", "__MACOSX"];
+	#else
+	public static var modRoot:String = "";
+	public static var sharedFolders:Array<String> = [];
+	public static var extraRoots:Array<String> = [];
+	public static var ignoredEntries:Array<String> = [];
+	#end
 
 	static var dirty:Bool = true;
 	static var activeMods:Array<ModInfo> = [];
@@ -25,6 +32,9 @@ class ModLoader
 
 	public static function setRoot(path:String):Void
 	{
+		#if !sys
+		return;
+		#end
 		modRoot = path;
 		dirty = true;
 	}
@@ -41,6 +51,9 @@ class ModLoader
 
 	public static function registerExtraRoot(path:String):Void
 	{
+		#if !sys
+		return;
+		#end
 		if(path == null || path.trim() == "") return;
 		var norm = Path.normalize(path);
 		if(!extraRoots.contains(norm))
@@ -52,18 +65,28 @@ class ModLoader
 
 	public static function getActiveMods():Array<ModInfo>
 	{
+		#if !sys
+		return [];
+		#end
 		ensure();
 		return activeMods;
 	}
 
 	public static function getMod(id:String):Null<ModInfo>
 	{
+		#if !sys
+		return null;
+		#end
 		ensure();
 		return modsById.get(id);
 	}
 
 	public static function refresh():Array<ModInfo>
 	{
+		#if !sys
+		activeMods = [];
+		return activeMods;
+		#end
 		dirty = false;
 		activeMods = [];
 		modsById = new Map();

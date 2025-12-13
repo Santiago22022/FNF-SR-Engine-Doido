@@ -304,8 +304,9 @@ class Controls
 				if(pad.checkButton(bind, inputState))
 					return pad.checkButton(bind, inputState);
 
-				//if(bind == "ACCEPT" && inputState == JUST_PRESSED && (pad.checkButton(bind, PRESSED) || pad.checkButton(bind, JUST_RELEASED)))
-				//	return false;	
+				// Prevent accept while touching any pad button (e.g., navigation)
+				if(bind == "ACCEPT" && pad.anyButtonActive(inputState))
+					return false;
 			}
 		}
 
@@ -320,5 +321,11 @@ class Controls
 		else
 			return false;
 	}
+	#end
+	#if !TOUCH_CONTROLS
+	public static var canTouch:Bool = false;
+	public static function shouldUseTouch():Bool return false;
+	public static function resetTimer():Void {}
+	public static function checkMobile(bind:String, inputState:FlxInputState):Bool return false;
 	#end
 }

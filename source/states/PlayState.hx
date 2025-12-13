@@ -25,6 +25,7 @@ import flixel.tweens.FlxEase;
 import flixel.util.FlxTimer;
 import flixel.addons.display.FlxRuntimeShader;
 import backend.utils.ObjectPool;
+import backend.utils.InputManager;
 import openfl.filters.BitmapFilter;
 import openfl.filters.ShaderFilter;
 import objects.*;
@@ -463,6 +464,13 @@ class PlayState extends MusicBeatState
 			add(hitbox);
 		}
 		#end
+
+		inputManager = new InputManager(#if TOUCH_CONTROLS hitbox #end);
+		// keep justPressed for a single frame to avoid double-hit + ghost miss
+		inputManager.holdFrames = 1;
+		pressed = inputManager.pressed;
+		justPressed = inputManager.justPressed;
+		released = inputManager.released;
 		
 		if(hasCutscene() && !playedCutscene)
 		{
@@ -998,6 +1006,7 @@ class PlayState extends MusicBeatState
 	public var pressed:Array<Bool> 		= [false, false, false, false];
 	public var justPressed:Array<Bool> 	= [false, false, false, false];
 	public var released:Array<Bool> 	= [false, false, false, false];
+	var inputManager:InputManager = null;
 	var focusSignalsHooked:Bool = false;
 		
 	var playerSinging:Bool = false;
@@ -1051,6 +1060,12 @@ class PlayState extends MusicBeatState
 
 	inline function clearInputStates():Void
 	{
+		if(inputManager != null)
+		{
+			inputManager.clearStates();
+			return;
+		}
+
 		for(i in 0...4)
 		{
 			pressed[i] = false;
@@ -1061,6 +1076,12 @@ class PlayState extends MusicBeatState
 
 	inline function updateInputStates():Bool
 	{
+		if(inputManager != null)
+		{
+			inputManager.update();
+			return justPressed[0] || justPressed[1] || justPressed[2] || justPressed[3];
+		}
+
 		pressed[0] = Controls.pressed(LEFT);
 		pressed[1] = Controls.pressed(DOWN);
 		pressed[2] = Controls.pressed(UP);
@@ -1077,18 +1098,18 @@ class PlayState extends MusicBeatState
 		released[3] = Controls.released(RIGHT);
 
 		#if TOUCH_CONTROLS
-			if(hitbox != null)
-				for(i in 0...CoolUtil.directions.length) {
-					if(hitbox.checkButton(CoolUtil.directions[i], PRESSED))
-						pressed[i] = true;
+		if(hitbox != null && Controls.canTouch)
+			for(i in 0...CoolUtil.directions.length) {
+				if(hitbox.checkButton(CoolUtil.directions[i], PRESSED))
+					pressed[i] = true;
 
-					if(hitbox.checkButton(CoolUtil.directions[i], JUST_PRESSED))
-						justPressed[i] = true;
+				if(hitbox.checkButton(CoolUtil.directions[i], JUST_PRESSED))
+					justPressed[i] = true;
 
-					if(hitbox.checkButton(CoolUtil.directions[i], RELEASED))
-						released[i] = true;
-				}
-			#end
+				if(hitbox.checkButton(CoolUtil.directions[i], RELEASED))
+					released[i] = true;
+			}
+		#end
 
 		return justPressed[0] || justPressed[1] || justPressed[2] || justPressed[3];
 	}
@@ -1998,9 +2019,17 @@ class PlayState extends MusicBeatState
 		for(strumline in strumlines.members)
 			if(!strumline.isPlayer)
 				for(strum in strumline.strumGroup)
-					strum.visible = !SaveData.data.get('Middlescroll');
+					strum.visible = !(SaveData.data.get('Middlescroll') && !Controls.shouldUseTouch());
 
 		var strumPos:Array<Float> = [FlxG.width / 2, FlxG.width / 4];
+
+		// Mobile layout: both strumlines centered and separated for touch comfort
+		if(Controls.shouldUseTouch())
+		{
+			var gap:Float = CoolUtil.noteWidth() * 3;
+			var center:Float = FlxG.width / 2;
+			return [center - gap, center + gap];
+		}
 
 		if(SaveData.data.get('Middlescroll'))
 			return [-strumPos[0], strumPos[0]];
@@ -2204,6 +2233,11 @@ class PlayState extends MusicBeatState
 			FlxG.signals.focusLost.remove(clearInputStates);
 			FlxG.signals.focusGained.remove(clearInputStates);
 			focusSignalsHooked = false;
+		}
+		if(inputManager != null)
+		{
+			inputManager.destroy();
+			inputManager = null;
 		}
 		super.destroy();
 	}

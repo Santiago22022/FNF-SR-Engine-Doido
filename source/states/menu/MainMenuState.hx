@@ -121,7 +121,7 @@ class MainMenuState extends MusicBeatState
 		bg.y = bgPosY;
 
 		#if TOUCH_CONTROLS
-		createPad("back");
+		createPad("menu");
 		#end
 	}
 	

@@ -74,6 +74,7 @@ class OptionsSubState extends MusicBeatSubState
             "Invert Swipes",
             "Button Opacity",
             "Hitbox Opacity",
+            "Hitbox Style",
         ]
         #end
 	];
@@ -171,7 +172,7 @@ class OptionsSubState extends MusicBeatSubState
         spawnItems('main');
 
         #if TOUCH_CONTROLS
-		createPad("back", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
+		createPad("menu", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
 		#end
     }
 

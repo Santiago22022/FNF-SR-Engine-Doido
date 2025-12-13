@@ -114,7 +114,7 @@ class DialogueHistorySubState extends MusicBeatSubState
 
         #if TOUCH_CONTROLS
         stateTxt.x = 0;
-		createPad("back", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
+		createPad("menu", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
 		#end
 	}
 
