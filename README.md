@@ -3,9 +3,9 @@
 <img src="https://www.newgrounds.com/dump/draw/a7487bb1dcc15a499c00a5c5d4be5eb3">
 </p>
 
-## Friday Night Funkin' Rewritten
+## SR Engine
 
-FNF: SR Engine is a rewritte of FNF's code, while still being written in HaxeFlixel and aiming to be familiar to anyone knowledged in other FNF hardcoded engines.
+FNF: SR Engine is a fork of Doido Engine
 
 ## Features
 
@@ -23,6 +23,7 @@ FNF: SR Engine is a rewritte of FNF's code, while still being written in HaxeFli
 - Easily customizable Options and Save data
 - In-game Crash Handler
 - Chart auto-saving
+- Loader mods psych and vanilla (testing)
 
 and more!
 
@@ -46,11 +47,11 @@ Some other assets, such as test sprites and music, are used under permission fro
 <img src="https://www.newgrounds.com/dump/draw/5657fbf528979526e5e7da27e30cd2a7">
 </p>
 
-### [DiogoTV](https://bsky.app/profile/diogotv.bsky.social) - SR Engine's Owner and Main Coder
-### [teles](https://youtube.com/@telesfnf) - SR Engine's Additional Coder
+### [DiogoTV](https://bsky.app/profile/diogotv.bsky.social) - Doido Engine's Owner and Main Coder
+### [teles](https://youtube.com/@telesfnf) - Doido Engine's Additional Coder
 
-### [GoldenFoxy](https://bsky.app/profile/goldenfoxy.bsky.social) - Main designer of SR Engine's chart editor
-### [JulianoBeta](https://www.youtube.com/@prodjuyko) - Composed SR Engine's offset menu music
+### [GoldenFoxy](https://bsky.app/profile/goldenfoxy.bsky.social) - Main designer of Doido Engine's chart editor
+### [JulianoBeta](https://www.youtube.com/@prodjuyko) - Composed Doido Engine's offset menu music
 ### [crowplexus](https://github.com/crowplexus) - Creator of HScript Iris
 ### [yoisabo](https://bsky.app/profile/yoisabo.bsky.social) - Chart Editor's Event Icons Artist
 ### [cocopuffs](https://x.com/cocopuffswow) - Mobile Button Artist

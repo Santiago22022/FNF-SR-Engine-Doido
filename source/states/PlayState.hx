@@ -26,9 +26,12 @@ import flixel.util.FlxTimer;
 import flixel.addons.display.FlxRuntimeShader;
 import backend.utils.ObjectPool;
 import backend.utils.InputManager;
+import backend.mobile.SafeArea;
+import backend.mobile.MobileTuner;
 import openfl.filters.BitmapFilter;
 import openfl.filters.ShaderFilter;
 import objects.*;
+import backend.psych.PsychLuaManager;
 import objects.hud.*;
 import objects.hud.game.*;
 import objects.note.*;
@@ -49,11 +52,16 @@ using StringTools;
 class PlayState extends MusicBeatState
 {
 	public var notePool:ObjectPool<Note>;
+	public static var enableOptimizedNotes:Bool = true;
+	public static var enableNotePooling:Bool = true;
+	static inline var NOTE_RENDER_MIN_AHEAD:Int = 1200;
+	static inline var NOTE_DESPAWN_BUFFER:Int = 300;
 
 	// song stuff
 	public static var EVENTS:EventSong;
 	public static var SONG:SwagSong;
 	public static var songDiff:String = "normal";
+	public var psychLua:PsychLuaManager;
 	// more song stuff
 	public var inst:FlxSound;
 	public var vocals:FlxSound;
@@ -98,6 +106,7 @@ class PlayState extends MusicBeatState
 	public var bfStrumline:Strumline;
 	public var dadStrumline:Strumline;
 	var strumlinesById:Map<Int, Strumline> = new Map();
+	var strumFrameCaches:Map<Int, StrumFrameCache> = new Map();
 	
 	var unspawnCount:Int = 0;
 	public var unspawnNotes:Array<Note> = [];
@@ -216,6 +225,7 @@ class PlayState extends MusicBeatState
 	{
 		super.create();
 		instance = this;
+		MobileTuner.apply();
 		strumlinesById.clear();
 		if(!focusSignalsHooked)
 		{
@@ -243,6 +253,7 @@ class PlayState extends MusicBeatState
 			loadedScripts.push(newScript);
 		}
 		setScript("this", instance);
+		psychLua = new PsychLuaManager(SONG.song, songDiff);
 
 		notePool = new ObjectPool(Note, 0, null, function(note:Note) note.resetNote());
 
@@ -378,6 +389,7 @@ class PlayState extends MusicBeatState
 			strumline.scrollSpeed = SONG.speed;
 			strumline.updateHitbox();
 		}
+		registerStrumCaches();
 		
 		hudBuild.downscroll = SaveData.data.get("Downscroll");
 		hudBuild.updatePositions();
@@ -457,7 +469,7 @@ class PlayState extends MusicBeatState
 		}
 
 		#if TOUCH_CONTROLS
-		if(Controls.shouldUseTouch())
+		if(Controls.shouldUseTouch() && SaveData.data.get("useVirtualControls"))
 		{
 			hitbox = new Hitbox(noteskins[1]);
 			hitbox.cameras = [camOther];
@@ -555,6 +567,7 @@ class PlayState extends MusicBeatState
 			startCountdown();
 
 		callScript("createPost");
+		if(psychLua != null) psychLua.onCreatePost();
 	}
 
 	public function startCountdown()
@@ -600,6 +613,8 @@ class PlayState extends MusicBeatState
 			{
 				startSong();
 			}
+			if(psychLua != null)
+				psychLua.onCountdownTick(daCount);
 
 			if(daCount != 4)
 			{
@@ -705,6 +720,8 @@ class PlayState extends MusicBeatState
 	public function startSong()
 	{
 		startedSong = true;
+		if(psychLua != null)
+			psychLua.onSongStart();
 		for(music in musicList)
 		{
 			music.stop();
@@ -813,6 +830,8 @@ class PlayState extends MusicBeatState
 			if(note.noteType != "no animation" && thisChar.specialAnim != 2)
 				thisChar.playNote(note);
 		}
+		if(psychLua != null)
+			psychLua.goodNoteHit(note, strumline);
 	}
 	function onNoteMiss(note:Note, strumline:Strumline, ghostTap:Bool = false)
 	{
@@ -851,6 +870,8 @@ class PlayState extends MusicBeatState
 			if(strumline.isPlayer)
 				popUpRating(note, strumline, true);
 		}
+		if(psychLua != null)
+			psychLua.noteMiss(note, strumline);
 	}
 	function onNoteHold(note:Note, strumline:Strumline)
 	{
@@ -1037,6 +1058,7 @@ class PlayState extends MusicBeatState
 		if(strumline == null) return;
 		strumlines.add(strumline);
 		registerStrumline(strumline);
+		getFrameCacheFor(strumline);
 	}
 
 	inline function noteSpawnWindow(strumline:Strumline):Int
@@ -1046,6 +1068,68 @@ class PlayState extends MusicBeatState
 		if(strumline.scrollSpeed <= 1.5)
 			spawnTime *= 2;
 		return spawnTime;
+	}
+
+	inline function noteRenderWindow(strumline:Strumline):Int
+	{
+		if(!enableOptimizedNotes)
+			return 0x3B9ACA00; // effectively "infinite" without risking overflow
+
+		var renderTime:Int = noteSpawnWindow(strumline);
+		if(renderTime < NOTE_RENDER_MIN_AHEAD)
+			renderTime = NOTE_RENDER_MIN_AHEAD;
+
+		return renderTime;
+	}
+
+	inline function getFrameCacheFor(strumline:Strumline):StrumFrameCache
+	{
+		if(strumline == null) return null;
+		if(!strumFrameCaches.exists(strumline.ID))
+			strumFrameCaches.set(strumline.ID, new StrumFrameCache());
+		return strumFrameCaches.get(strumline.ID);
+	}
+
+	inline function recycleNote(note:Note):Void
+	{
+		if(note == null) return;
+
+		if(enableNotePooling && notePool != null)
+		{
+			note.resetNote();
+			note.kill();
+			notePool.recycle(note);
+		}
+		else
+			note.destroy();
+	}
+
+	inline function pooledGhostNote():Note
+	{
+		if(notePool != null)
+			return notePool.get();
+
+		return new Note();
+	}
+
+	inline function registerStrumCaches():Void
+	{
+		strumFrameCaches.clear();
+		for(strumline in strumlines.members)
+			if(strumline != null)
+				strumFrameCaches.set(strumline.ID, new StrumFrameCache());
+	}
+
+	inline function isRenderableNote(note:Note, songPos:Float, renderAhead:Int, noteCrochet:Float):Bool
+	{
+		if(note == null) return false;
+		if(!enableOptimizedNotes) return true;
+
+		var timeDiff:Float = note.songTime - songPos;
+		if(timeDiff < -(noteCrochet + NOTE_DESPAWN_BUFFER))
+			return true; // keep trailing pieces for misses/clipping
+
+		return timeDiff <= renderAhead + note.holdLength + noteCrochet;
 	}
 
 	function stringToCam(str:String):FlxCamera {
@@ -1116,6 +1200,7 @@ class PlayState extends MusicBeatState
 	
 	override function update(elapsed:Float)
 	{
+		if(psychLua != null) psychLua.onUpdate(elapsed);
 		callScript("update", [elapsed]);
 		super.update(elapsed);
 		var followLerp:Float = cameraSpeed * 5 * elapsed;
@@ -1316,7 +1401,12 @@ class PlayState extends MusicBeatState
 				{
 					if(justPressed[i])
 					{
-						var possibleHitNotes:Array<Note> = []; // gets the possible ones
+						var cache = getFrameCacheFor(strumline);
+						var possibleHitNotes:Array<Note> = (cache != null ? cache.hitBuffer : null);
+						if(possibleHitNotes == null)
+							possibleHitNotes = [];
+						else
+							possibleHitNotes.resize(0); // gets the possible ones
 						var canHitNote:Note = null;
 						
 						for(note in strumline.noteGroup)
@@ -1362,7 +1452,7 @@ class PlayState extends MusicBeatState
 									// i don't think vocals should stop when ghost tapping
 									// vocals.volume = 0;
 
-									var note = new Note();
+									var note = pooledGhostNote();
 									note.updateData(0, i, "none", assetModifier);
 									//note.reloadSprite();
 									onNoteMiss(note, strumline, true);
@@ -1440,6 +1530,7 @@ class PlayState extends MusicBeatState
 		
 		health = FlxMath.bound(health, 0, 2); // bounds the health
 		callScript("updatePost", [elapsed]);
+		if(psychLua != null) psychLua.onUpdatePost(elapsed);
 	}
 
 	inline function applySongSpecificEffects(elapsed:Float):Void
@@ -1474,12 +1565,18 @@ class PlayState extends MusicBeatState
 		for(strumline in strumlines)
 		{
 			if(strumline == null) continue;
+			var frameCache = getFrameCacheFor(strumline);
+			if(frameCache != null)
+				frameCache.reset();
 			if(strumline.isPlayer)
 			{
 				var char = strumline.character.char;
 				if(char.singAnims.contains(char.curAnimName))
 					isIdling = false;
 			}
+
+			var renderAhead:Int = noteRenderWindow(strumline);
+			var scrollSpeed:Float = strumline.scrollSpeed * 0.45;
 
 			for(hold in strumline.holdGroup)
 			{
@@ -1488,7 +1585,7 @@ class PlayState extends MusicBeatState
 				{
 					hold.scrollSpeed = strumline.scrollSpeed;
 					
-					hold.holdClipHeight = hold.noteCrochet * (strumline.scrollSpeed * 0.45) + 2;
+					hold.holdClipHeight = hold.noteCrochet * scrollSpeed + 2;
 					if(!hold.isHoldEnd)
 					{
 						var holdWidth:Float = hold.frameWidth * hold.scale.x;
@@ -1510,41 +1607,53 @@ class PlayState extends MusicBeatState
 				if(note == null) continue;
 				if(!paused)
 				{
-					var despawnTime:Int = 300;
-					
-					if(songPos >= note.songTime + inputOffset + note.holdLength + noteCrochet + despawnTime)
+					if(songPos >= note.songTime + inputOffset + note.holdLength + noteCrochet + NOTE_DESPAWN_BUFFER)
 					{
 						if(!note.gotHit && !note.missed && !note.mustMiss && !strumline.botplay)
 							onNoteMiss(note, strumline);
 						
 						note.clipRect = null;
 						strumline.removeNote(note);
-						note.destroy();
+						recycleNote(note);
 						continue;
 					}
 
 					note.setAlpha();
 				}
-				note.updateHitbox();
-				note.offset.x += note.frameWidth * note.scale.x / 2;
-				if(note.isHold)
+
+				var renderable:Bool = (!enableOptimizedNotes || isRenderableNote(note, songPos, renderAhead, noteCrochet));
+				if(renderable && frameCache != null)
 				{
-					note.offset.y = 0;
-					note.origin.y = 0;
+					frameCache.renderNotes.push(note);
+					if(note.isHold)
+						frameCache.holdNotes.push(note);
 				}
-				else
-					note.offset.y += note.frameHeight * note.scale.y / 2;
+
+				if(renderable)
+				{
+					note.updateHitbox();
+					note.offset.x += note.frameWidth * note.scale.x / 2;
+					if(note.isHold)
+					{
+						note.offset.y = 0;
+						note.origin.y = 0;
+					}
+					else
+						note.offset.y += note.frameHeight * note.scale.y / 2;
+				}
 			}
 		
-			for(note in strumline.noteGroup)
+			var renderNotes = (frameCache != null && enableOptimizedNotes) ? frameCache.renderNotes : strumline.noteGroup.members;
+			for(note in renderNotes)
 			{
 				if(note == null) continue;
+				if(note.isHold) continue;
 				var thisStrum = strumline.strumGroup.members[note.noteData];
 				if(thisStrum == null) continue;
 				
 				// follows the strum
 				var offsetX = note.noteOffset.x;
-				var offsetY = (note.songTime - songPos) * (strumline.scrollSpeed * 0.45);
+				var offsetY = (note.songTime - songPos) * scrollSpeed;
 				
 				var noteAngle:Float = (note.noteAngle + thisStrum.strumAngle);
 				if(strumline.downscroll)
@@ -1559,7 +1668,7 @@ class PlayState extends MusicBeatState
 				for(hold in note.children)
 				{
 					if(hold == null) continue;
-					var offsetY = hold.noteCrochet * (strumline.scrollSpeed * 0.45) * hold.ID;
+					var offsetY = hold.noteCrochet * scrollSpeed * hold.ID;
 					
 					hold.angle = -noteAngle;
 					CoolUtil.setNotePos(hold, note, noteAngle, offsetX, offsetY);
@@ -1588,7 +1697,8 @@ class PlayState extends MusicBeatState
 			
 			if(!paused)
 			{
-				for(hold in strumline.holdGroup)
+				var holdRender = (frameCache != null && enableOptimizedNotes) ? frameCache.holdNotes : strumline.holdGroup.members;
+				for(hold in holdRender)
 				{
 					if(hold == null) continue;
 					var holdParent = hold.parentNote;
@@ -1707,6 +1817,8 @@ class PlayState extends MusicBeatState
 				Conductor.setBPM(change.bpm);
 
 		hudBuild.beatHit(curBeat);
+		if(psychLua != null)
+			psychLua.onBeatHit(curBeat);
 		
 		if(curBeat % 4 == 0)
 			zoomCamera(0.05, 0.025);
@@ -1748,6 +1860,8 @@ class PlayState extends MusicBeatState
 		super.stepHit();
 		stageBuild.stepHit(curStep);
 		hudBuild.stepHit(curStep);
+		if(psychLua != null)
+			psychLua.onStepHit(curStep);
 		syncSong();
 		
 		callScript("stepHit", [curStep]);
@@ -2088,6 +2202,8 @@ class PlayState extends MusicBeatState
 	}
 
 	function onEventHit(daEvent:EventNote) {
+		if(psychLua != null)
+			psychLua.onEvent(daEvent.eventName, daEvent.value1, daEvent.value2);
 		switch(daEvent.eventName)
 		{
 			case 'Play Animation':
@@ -2240,5 +2356,21 @@ class PlayState extends MusicBeatState
 			inputManager = null;
 		}
 		super.destroy();
+	}
+}
+
+private class StrumFrameCache
+{
+	public var renderNotes:Array<Note> = [];
+	public var holdNotes:Array<Note> = [];
+	public var hitBuffer:Array<Note> = [];
+
+	public function new() {}
+
+	public inline function reset():Void
+	{
+		renderNotes.resize(0);
+		holdNotes.resize(0);
+		hitBuffer.resize(0);
 	}
 }

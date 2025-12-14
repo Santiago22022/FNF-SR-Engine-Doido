@@ -197,6 +197,31 @@ class SaveData
 			"Choose the look of the gameplay hitbox buttons.",
 			["BASE", "DOIDO", "PIXEL"]
 		],
+		"useMobileUI" => [
+			#if mobile true #else false #end,
+			CHECKMARK,
+			"Enables mobile-friendly UI layout (safe areas/scale)."
+		],
+		"useVirtualControls" => [
+			#if mobile true #else false #end,
+			CHECKMARK,
+			"Show touch controls in gameplay."
+		],
+		"useSafeArea" => [
+			#if mobile true #else false #end,
+			CHECKMARK,
+			"Apply safe area padding for notches/gesture bars."
+		],
+		"useMobileQualityTier" => [
+			false,
+			CHECKMARK,
+			"Enable mobile-oriented quality reductions (splashes/shaders off)."
+		],
+		"useModMenuTouchList" => [
+			#if mobile true #else false #end,
+			CHECKMARK,
+			"Use touch scroll/large buttons in the Mods menu."
+		],
 		/*
 		*
 		* EXTRA STUFF

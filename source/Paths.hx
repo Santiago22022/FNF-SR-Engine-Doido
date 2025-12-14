@@ -11,6 +11,7 @@ import openfl.display.BitmapData;
 import openfl.media.Sound;
 import states.PlayState;
 import backend.system.ModLoader;
+import backend.system.ModPaths;
 import tjson.TJSON;
 
 using StringTools;
@@ -22,11 +23,9 @@ class Paths
 
 	static inline function modAssetPath(filePath:String, ?library:String):String
 	{
-		#if desktop
-		var modPath = ModLoader.resolveAssetPath(filePath, library);
+		var modPath = ModPaths.resolveAssetPath(filePath, library);
 		if(modPath != null)
 			return modPath;
-		#end
 		return getPath(filePath, library);
 	}
 
@@ -67,32 +66,35 @@ class Paths
 	}
 	
 	public static function fileExists(filePath:String, ?library:String):Bool
-		#if desktop
-		return sys.FileSystem.exists(modAssetPath(filePath, library));
-		#else
-		return openfl.Assets.exists(getPath(filePath, library));
-		#end
+		return ModPaths.exists(filePath, library);
 	
 	public static function getSound(key:String, ?library:String):Sound
 	{
 		var cacheId = cacheKey(key, library);
 		if(!renderedSounds.exists(cacheId))
 		{
-			if(!fileExists('$key.ogg', library)) {
+			var resolved = ModPaths.resolveWithExtensions(key, library, [".ogg", ".mp3"]);
+			if(resolved == null && !ModPaths.exists('$key.ogg', library))
+			{
 				Logs.print('$key.ogg doesnt exist', WARNING);
 				key = 'sounds/beep';
 				library = null;
 				cacheId = cacheKey(key, library);
+				resolved = ModPaths.resolveWithExtensions(key, library, [".ogg", ".mp3"]);
 			}
-			var soundPath = modAssetPath('$key.ogg', library);
-			Logs.print('created new sound $soundPath');
-			renderedSounds.set(cacheId,
-				#if desktop
-				Sound.fromFile(soundPath)
-				#else
-				openfl.Assets.getSound(soundPath, false)
-				#end
-			);
+
+			if(resolved == null)
+				resolved = getPath('$key.ogg', library);
+
+			Logs.print('created new sound $resolved');
+			#if sys
+			if(sys.FileSystem.exists(resolved))
+				renderedSounds.set(cacheId, Sound.fromFile(resolved));
+			else
+				renderedSounds.set(cacheId, openfl.Assets.getSound(resolved, false));
+			#else
+			renderedSounds.set(cacheId, openfl.Assets.getSound(resolved, false));
+			#end
 		}
 		return renderedSounds.get(cacheId);
 	}
@@ -101,15 +103,22 @@ class Paths
 		if(key.endsWith('.png'))
 			key = key.substring(0, key.lastIndexOf('.png'));
 		var cacheId = cacheKey(key, library);
-		var path = modAssetPath('images/$key.png', library);
+		var path = ModPaths.resolveWithExtensions('images/$key', library, [".png"]);
+		if(path == null)
+			path = getPath('images/$key.png', library);
+
 		if(fileExists('images/$key.png', library))
 		{
 			if(!renderedGraphics.exists(cacheId))
 			{
-				#if desktop
-				var bitmap = BitmapData.fromFile(path);
+				var bitmap:BitmapData;
+				#if sys
+				if(sys.FileSystem.exists(path))
+					bitmap = BitmapData.fromFile(path);
+				else
+					bitmap = openfl.Assets.getBitmapData(path, false);
 				#else
-				var bitmap = openfl.Assets.getBitmapData(path, false);
+				bitmap = openfl.Assets.getBitmapData(path, false);
 				#end
 				
 				var newGraphic = FlxGraphic.fromBitmapData(bitmap, false, cacheId, false);
@@ -226,11 +235,7 @@ class Paths
 		return getContent('$key.txt', library).trim();
 
 	public static function getContent(filePath:String, ?library:String):String
-		#if desktop
-		return sys.io.File.getContent(modAssetPath(filePath, library));
-		#else
-		return openfl.Assets.getText(getPath(filePath, library));
-		#end
+		return ModPaths.readText(filePath, library);
 
 	public static function json(key:String, ?library:String):Dynamic
 		return TJSON.parse(getContent('$key.json', library).trim());
@@ -291,31 +296,16 @@ class Paths
 	public static function readDir(dir:String, ?typeArr:Array<String>, ?removeType:Bool = true, ?library:String):Array<String>
 	{
 		var swagList:Array<String> = [];
-		
-		try {
-			#if desktop
-			var dirPath = modAssetPath(dir, library);
-			if(!sys.FileSystem.exists(dirPath) || !sys.FileSystem.isDirectory(dirPath))
-				return swagList;
-			var rawList = sys.FileSystem.readDirectory(dirPath);
-			for(i in 0...rawList.length)
-			{
-				if(typeArr?.length > 0)
-				{
-					for(type in typeArr) {
-						if(rawList[i].endsWith(type)) {
-							// cleans it
-							if(removeType)
-								rawList[i] = rawList[i].replace(type, "");
-							swagList.push(rawList[i]);
-						}
-					}
-				}
-				else
-					swagList.push(rawList[i]);
-			}
-			#end
-		} catch(e) {}
+		var rawList = ModPaths.listDir(dir, library, typeArr, false);
+		for(item in rawList)
+		{
+			var cleaned = item;
+			if(typeArr != null && removeType)
+				for(type in typeArr)
+					if(cleaned.endsWith(type))
+						cleaned = cleaned.replace(type, "");
+			swagList.push(cleaned);
+		}
 		
 		Logs.print('read dir ${(swagList.length > 0) ? '$swagList' : 'EMPTY'} at ${getPath(dir, library)}');
 		return swagList;

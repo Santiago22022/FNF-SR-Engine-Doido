@@ -149,11 +149,50 @@ class SongData
 	inline public static function loadFromJson(jsonInput:String, ?diff:String = "normal"):SwagSong
 	{		
 		Logs.print('Chart Loaded: ' + '$jsonInput/$diff');
+		var targetDiff = diff;
+		var chartPath:Null<String> = null;
 
-		if(!Paths.fileExists('songs/$jsonInput/chart/$diff.json'))
-			diff = "normal";
+		var candidates:Array<String> = [
+			'songs/$jsonInput/chart/$targetDiff.json',
+			'data/$jsonInput/${jsonInput}-$targetDiff.json',
+			'data/$jsonInput/$targetDiff.json'
+		];
+		for(path in candidates)
+			if(Paths.fileExists(path))
+			{
+				chartPath = path;
+				break;
+			}
+
+		if(chartPath == null && targetDiff != "normal")
+		{
+			targetDiff = "normal";
+			candidates = [
+				'songs/$jsonInput/chart/$targetDiff.json',
+				'data/$jsonInput/${jsonInput}-$targetDiff.json',
+				'data/$jsonInput/$targetDiff.json'
+			];
+			for(path in candidates)
+				if(Paths.fileExists(path))
+				{
+					chartPath = path;
+					break;
+				}
+		}
+
+		if(chartPath == null)
+		{
+			Logs.print('Chart not found for $jsonInput/$diff', WARNING);
+			return defaultSong();
+		}
 		
-		var daSong:SwagSong = cast Paths.json('songs/$jsonInput/chart/$diff').song;
+		var chartKey:String = chartPath;
+		if(chartKey.endsWith(".json"))
+			chartKey = chartKey.substr(0, chartKey.length - 5);
+
+		var rawChart:Dynamic = Paths.json(chartKey);
+		var rawSong:Dynamic = Reflect.hasField(rawChart, "song") ? Reflect.field(rawChart, "song") : rawChart;
+		var daSong:SwagSong = cast rawSong;
 		
 		// formatting it
 		daSong = formatSong(daSong);
@@ -165,19 +204,37 @@ class SongData
 	{
 		var formatPath = 'events-$diff';
 
-		function checkFile():Bool {
-			return Paths.fileExists('songs/$jsonInput/chart/$formatPath.json');
+		function firstExisting():Null<String> {
+			var candidates = [
+				'songs/$jsonInput/chart/$formatPath.json',
+				'data/$jsonInput/${jsonInput}-$formatPath.json',
+				'data/$jsonInput/$formatPath.json'
+			];
+			for(path in candidates)
+				if(Paths.fileExists(path))
+					return path;
+			return null;
 		}
-		if(!checkFile())
+
+		var path = firstExisting();
+		if(path == null)
+		{
 			formatPath = 'events';
-		if(!checkFile()) {
+			path = firstExisting();
+		}
+
+		if(path == null) {
 			Logs.print('No Events Loaded');
 			return {songEvents: []};
 		}
 
-		Logs.print('Events Loaded: ' + '$jsonInput/chart/$formatPath');
+		Logs.print('Events Loaded: ' + path);
 
-		var daEvents:EventSong = cast Paths.json('songs/$jsonInput/chart/$formatPath');
+		var eventKey = path;
+		if(eventKey.endsWith(".json"))
+			eventKey = eventKey.substr(0, eventKey.length - 5);
+
+		var daEvents:EventSong = cast Paths.json(eventKey);
 		return daEvents;
 	}
 	

@@ -4,10 +4,17 @@ import haxe.io.Path;
 import StringTools;
 import tjson.TJSON;
 import backend.system.ModTypes;
+import backend.system.ModConfig;
 
 #if sys
 import sys.FileSystem;
 import sys.io.File;
+#if android
+import lime.system.System;
+#end
+#else
+import openfl.Assets;
+import openfl.utils.AssetType;
 #end
 
 class ModLoader
@@ -18,7 +25,7 @@ class ModLoader
 	public static var extraRoots:Array<String> = [];
 	public static var ignoredEntries:Array<String> = [".git", ".svn", ".idea", ".vscode", "__MACOSX"];
 	#else
-	public static var modRoot:String = "";
+	public static var modRoot:String = "assets/mods";
 	public static var sharedFolders:Array<String> = [];
 	public static var extraRoots:Array<String> = [];
 	public static var ignoredEntries:Array<String> = [];
@@ -26,6 +33,7 @@ class ModLoader
 
 	static var dirty:Bool = true;
 	static var activeMods:Array<ModInfo> = [];
+	static var allMods:Array<ModInfo> = [];
 	static var modsById:Map<String, ModInfo> = new Map();
 	static var manifestCache:Map<String, Dynamic> = new Map();
 	static var resolveCache:Map<String, String> = new Map();
@@ -42,6 +50,7 @@ class ModLoader
 	public static function clear():Void
 	{
 		activeMods = [];
+		allMods = [];
 		modsById = new Map();
 		manifestCache = new Map();
 		resolveCache = new Map();
@@ -65,36 +74,47 @@ class ModLoader
 
 	public static function getActiveMods():Array<ModInfo>
 	{
-		#if !sys
-		return [];
-		#end
 		ensure();
 		return activeMods;
+	}
+
+	public static function getAllMods():Array<ModInfo>
+	{
+		ensure();
+		return allMods;
 	}
 
 	public static function getMod(id:String):Null<ModInfo>
 	{
-		#if !sys
-		return null;
-		#end
 		ensure();
 		return modsById.get(id);
 	}
 
+	public static function saveUserConfig(mods:Array<ModInfo>):Void
+	{
+		ModConfig.init();
+		ModConfig.persistFrom(mods);
+		dirty = true;
+	}
+
 	public static function refresh():Array<ModInfo>
 	{
-		#if !sys
-		activeMods = [];
-		return activeMods;
-		#end
 		dirty = false;
 		activeMods = [];
+		allMods = [];
 		modsById = new Map();
 		manifestCache = new Map();
 		resolveCache = new Map();
+		ModConfig.init();
 		buildSharedFolders();
+
+		var preferredOrder:Array<String> = [];
 		#if sys
-		var preferredOrder = loadOrderList();
+		preferredOrder = ModConfig.order.copy();
+		var fileOrder = loadOrderList();
+		for(id in fileOrder)
+			if(!preferredOrder.contains(id))
+				preferredOrder.push(id);
 
 		for(root in getScanRoots())
 		{
@@ -108,25 +128,34 @@ class ModLoader
 					continue;
 
 				var meta = readMeta(modPath);
-				if(meta.enabled)
-				{
-					activeMods.push(meta);
-					modsById.set(meta.id, meta);
-				}
+				allMods.push(meta);
+				modsById.set(meta.id, meta);
 			}
 		}
+		#else
+		preferredOrder = ModConfig.order.copy();
+		allMods = scanEmbeddedMods();
+		for(mod in allMods)
+			modsById.set(mod.id, mod);
+		#end
+
+		applyUserConfig(allMods, preferredOrder);
+		allMods.sort(function(a:ModInfo, b:ModInfo) {
+			return sortMods(preferredOrder, a, b);
+		});
+		for(mod in allMods)
+			if(mod.enabled)
+				activeMods.push(mod);
 
 		activeMods.sort(function(a:ModInfo, b:ModInfo) {
 			return sortMods(preferredOrder, a, b);
 		});
 		validateMods(activeMods);
-		#end
 		return activeMods;
 	}
 
 	public static function resolveAssetPath(key:String, ?library:String):Null<String>
 	{
-		#if sys
 		ensure();
 		if(activeMods.length <= 0 && sharedFolders.length <= 0) return null;
 
@@ -144,6 +173,7 @@ class ModLoader
 			}
 		}
 
+		#if sys
 		for(shared in sharedFolders)
 		{
 			var sharedPath = '$shared/$modKey';
@@ -159,7 +189,6 @@ class ModLoader
 
 	public static function resolveAllAssetPaths(key:String, ?library:String):Array<String>
 	{
-		#if sys
 		ensure();
 		var paths:Array<String> = [];
 		var modKey = (library != null && library.length > 0) ? '$library/$key' : key;
@@ -170,35 +199,29 @@ class ModLoader
 			if(resolved != null)
 				paths.push(resolved);
 		}
+		#if sys
 		for(shared in sharedFolders)
 		{
 			var sharedPath = '$shared/$modKey';
 			if(FileSystem.exists(sharedPath))
 				paths.push(sharedPath);
 		}
-		return paths;
-		#else
-		return [];
 		#end
+		return paths;
 	}
 
 	public static inline function modHasAsset(mod:ModInfo, key:String, ?library:String):Bool
 	{
-		#if sys
 		var modKey = (library != null && library.length > 0) ? '$library/$key' : key;
 		return ModManager.resolve(mod, modKey) != null;
-		#else
-		return false;
-		#end
 	}
 
-	#if sys
 	static inline function ensure():Void
 	{
 		if(dirty)
 			refresh();
 	}
-
+	#if sys
 	static function readManifest(path:String):Dynamic
 	{
 		if(path == null || path == "" || !FileSystem.exists(path) || FileSystem.isDirectory(path))
@@ -214,7 +237,25 @@ class ModLoader
 		}
 		return null;
 	}
+	#else
+	static function readManifest(path:String):Dynamic
+	{
+		if(path == null || path == "" || !Assets.exists(path))
+			return null;
+		if(manifestCache.exists(path))
+			return manifestCache.get(path);
+		try {
+			var data = TJSON.parse(Assets.getText(path));
+			manifestCache.set(path, data);
+			return data;
+		} catch(e) {
+			Logs.print('error reading $path: $e', WARNING);
+		}
+		return null;
+	}
+	#end
 
+	#if sys
 	static function readMeta(path:String):ModInfo
 	{
 		var folder:String = Path.withoutDirectory(path);
@@ -297,7 +338,14 @@ class ModLoader
 			conflicts: conflicts
 		};
 	}
+	#else
+	static function readMeta(path:String):ModInfo
+	{
+		return readEmbeddedMeta(path, Path.withoutDirectory(path));
+	}
+	#end
 
+	#if sys
 	static function detectModType(path:String, data:Dynamic, currentType:String, hasPolymod:Bool):String
 	{
 		var normPath = Path.normalize(path).toLowerCase();
@@ -320,7 +368,21 @@ class ModLoader
 
 		return currentType;
 	}
+	#else
+	static function detectModType(path:String, data:Dynamic, currentType:String, hasPolymod:Bool):String
+	{
+		if(hasPolymod || Reflect.hasField(data, "api_version"))
+			return "v-slice";
 
+		var normPath = Path.normalize(path).toLowerCase();
+		if(normPath.indexOf("psychengine") != -1 || normPath.indexOf("psych") != -1)
+			return "psych";
+
+		return currentType;
+	}
+	#end
+
+	#if sys
 	static function loadOrderList():Array<String>
 	{
 		var out:Array<String> = [];
@@ -343,6 +405,9 @@ class ModLoader
 		}
 		return out;
 	}
+	#else
+	static function loadOrderList():Array<String> return [];
+	#end
 
 	static function sortByOrder(order:Array<String>, a:ModInfo, b:ModInfo):Int
 	{
@@ -387,6 +452,7 @@ class ModLoader
 		return priority;
 	}
 
+	#if sys
 	static function buildAssetRoots(path:String, data:Dynamic):Array<String>
 	{
 		var roots:Array<String> = [];
@@ -433,6 +499,39 @@ class ModLoader
 		}
 		return finalRoots;
 	}
+	#else
+	static function buildAssetRoots(path:String, data:Dynamic):Array<String>
+	{
+		var roots:Array<String> = [];
+		var normalized = Path.normalize(path);
+		roots.push(normalized);
+		roots.push(Path.normalize('$normalized/assets'));
+		roots.push(Path.normalize('$normalized/pack'));
+		roots.push(Path.normalize('$normalized/pack/assets'));
+		if(Reflect.hasField(data, "assetRoots"))
+		{
+			var custom:Array<Dynamic> = Reflect.field(data, "assetRoots");
+			for(root in custom)
+			{
+				if(root == null) continue;
+				var rStr:String = Std.string(root);
+				if(rStr.trim() == "") continue;
+				roots.push(Path.normalize('$normalized/$rStr'));
+			}
+		}
+		var dedup:Map<String, Bool> = new Map();
+		var finalRoots:Array<String> = [];
+		for(r in roots)
+		{
+			if(!dedup.exists(r))
+			{
+				dedup.set(r, true);
+				finalRoots.push(r);
+			}
+		}
+		return finalRoots;
+	}
+	#end
 
 	static function collectStringArray(val:Dynamic):Array<String>
 	{
@@ -473,6 +572,119 @@ class ModLoader
 		return out;
 	}
 
+	static function applyUserConfig(mods:Array<ModInfo>, preferredOrder:Array<String>):Void
+	{
+		for(mod in mods)
+		{
+			mod.enabled = ModConfig.isEnabled(mod.id, mod.enabled);
+			if(!preferredOrder.contains(mod.id))
+				preferredOrder.push(mod.id);
+		}
+	}
+
+	#if !sys
+	static function scanEmbeddedMods():Array<ModInfo>
+	{
+		var mods:Array<ModInfo> = [];
+		var seen:Map<String, Bool> = new Map();
+		for(asset in Assets.list())
+		{
+			if(!asset.startsWith('assets/mods/'))
+				continue;
+
+			var parts = asset.split("/");
+			if(parts.length < 3) continue;
+			var modFolder = parts[2];
+			if(seen.exists(modFolder)) continue;
+			seen.set(modFolder, true);
+
+			var modBase = Path.normalize('assets/mods/$modFolder');
+			mods.push(readEmbeddedMeta(modBase, modFolder));
+		}
+		return mods;
+	}
+
+	static function readEmbeddedMeta(base:String, folder:String):ModInfo
+	{
+		var metaPath = '$base/mod.json';
+		var psychMetaPath = '$base/pack.json';
+		var polymodMetaPath = '$base/_polymod_meta.json';
+
+		var data:Dynamic = readManifest(metaPath);
+		if(data == null) data = readManifest(psychMetaPath);
+		if(data == null) data = readManifest(polymodMetaPath);
+		if(data == null) data = {};
+
+		function pick<T>(field:String, fallback:T):T
+		{
+			return Reflect.hasField(data, field) ? Reflect.field(data, field) : fallback;
+		}
+		function pickAlias<T>(fields:Array<String>, fallback:T):T
+		{
+			for(f in fields)
+				if(Reflect.hasField(data, f))
+					return Reflect.field(data, f);
+			return fallback;
+		}
+
+		var id = normalizeId(pickAlias(["id", "name", "title"], folder));
+		var icon = pickAlias(["icon", "icon_path"], null);
+		if(icon != null)
+			icon = Path.normalize('$base/$icon');
+
+		var enabled = pickAlias(["enabled", "active"], true);
+		if(pickAlias(["disabled", "hidden"], false))
+			enabled = false;
+
+		var hasPolymod:Bool = polymodMetaPath != null && Assets.exists(polymodMetaPath);
+		var modType = detectModType(base, data, pickAlias(["type", "engine", "loader"], hasPolymod ? "v-slice" : "generic"), hasPolymod);
+
+		var assetRoots = buildAssetRoots(base, data);
+		var authors = collectStringArray(pickAlias(["authors", "author", "creators", "credits", "contributors"], []));
+		var license:Null<String> = pickAlias(["license", "licence"], null);
+		var engineVersion:Null<String> = pickAlias(["engineVersion", "targetEngineVersion", "api_version"], null);
+		var dependencies = collectStringArray(pickAlias(["dependencies", "depends", "requires"], []));
+		var conflicts = collectStringArray(pickAlias(["conflicts", "incompatibilities"], []));
+
+		if(icon == null)
+		{
+			var altIcons = [
+				'$base/pack.png',
+				'$base/icon.png',
+				'$base/pack/icon.png',
+				'$base/_polymod_icon.png'
+			];
+			for(ic in altIcons)
+				if(Assets.exists(ic))
+				{
+					icon = Path.normalize(ic);
+					break;
+				}
+		}
+
+		var priorityFromFolder = extractPriorityFromFolder(folder);
+
+		return {
+			id: id,
+			name: pickAlias(["name", "title"], folder),
+			version: pickAlias(["version", "modVersion"], "0.0.0"),
+			description: pickAlias(["description", "desc"], ""),
+			priority: Std.int(pickAlias(["priority", "order", "index"], priorityFromFolder)),
+			enabled: enabled,
+			path: Path.normalize(base),
+			type: modType,
+			icon: icon,
+			assetRoots: assetRoots,
+			authors: authors,
+			license: license,
+			engineVersion: engineVersion,
+			dependencies: dependencies,
+			conflicts: conflicts
+		};
+	}
+	#end
+
+	#if sys
 	static function buildSharedFolders():Void
 	{
 		sharedFolders = [];
@@ -491,6 +703,15 @@ class ModLoader
 		roots.push(main);
 		for(extra in extraRoots)
 			roots.push(extra);
+
+		#if android
+		var appStorage = Path.normalize(System.applicationStorageDirectory + "/mods");
+		if(!roots.contains(appStorage))
+			roots.push(appStorage);
+		var sdcard = Path.normalize("/storage/emulated/0/SREngine/mods");
+		if(!roots.contains(sdcard))
+			roots.push(sdcard);
+		#end
 
 		var vsliceExample = Path.normalize('$main/../Funkin-main/example_mods');
 		if(FileSystem.exists(vsliceExample) && FileSystem.isDirectory(vsliceExample))
@@ -515,6 +736,16 @@ class ModLoader
 		}
 		return finalRoots;
 	}
+	#else
+	static function buildSharedFolders():Void
+	{
+		sharedFolders = [];
+		var base = Path.normalize('$modRoot/shared');
+		sharedFolders.push(base);
+		sharedFolders.push(Path.normalize('$base/assets'));
+	}
+	static function getScanRoots():Array<String> return [];
+	#end
 
 	static function validateMods(mods:Array<ModInfo>):Void
 	{
@@ -547,5 +778,4 @@ class ModLoader
 			return true;
 		return false;
 	}
-	#end
 }

@@ -14,6 +14,7 @@ import objects.menu.Alphabet;
 import objects.menu.options.*;
 import states.PlayState;
 import states.menu.MainMenuState;
+import states.menu.ModsMenuState;
 
 class OptionsSubState extends MusicBeatSubState
 {
@@ -22,6 +23,7 @@ class OptionsSubState extends MusicBeatSubState
         "gameplay",
         "appearance",
         #if TOUCH_CONTROLS "mobile", #end
+        "mods",
         "adjust offsets",
         "controls",
     ];
@@ -75,6 +77,11 @@ class OptionsSubState extends MusicBeatSubState
             "Button Opacity",
             "Hitbox Opacity",
             "Hitbox Style",
+            "useMobileUI",
+            "useVirtualControls",
+            "useSafeArea",
+            "useMobileQualityTier",
+            "useModMenuTouchList",
         ]
         #end
 	];
@@ -235,6 +242,9 @@ class OptionsSubState extends MusicBeatSubState
                         Logs.print('FUCK YOU!!', WARNING);*/
                         persistentDraw = false;
                         openSubState(new ControlsSubState());
+                    case "mods":
+                        FlxG.sound.play(Paths.sound('menu/scrollMenu'));
+                        Main.switchState(new ModsMenuState());
                     case "adjust offsets":
                         persistentDraw = false;
                         openSubState(new OffsetsSubState());

@@ -2,6 +2,8 @@ package backend.system;
 
 #if sys
 import sys.FileSystem;
+#else
+import openfl.Assets;
 #end
 import backend.system.ModLoaderPsych;
 import backend.system.ModLoaderVSlice;
@@ -51,14 +53,17 @@ class GenericResolver implements IModResolver
 
 	public function resolve(mod:ModInfo, modKey:String):Null<String>
 	{
-		#if sys
 		for(root in mod.assetRoots)
 		{
 			var full = '$root/$modKey';
+			#if sys
 			if(FileSystem.exists(full))
 				return full;
+			#else
+			if(openfl.Assets.exists(full))
+				return full;
+			#end
 		}
-		#end
 		return null;
 	}
 }

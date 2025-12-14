@@ -7,6 +7,8 @@ import backend.system.ModManager.IModResolver;
 
 #if sys
 import sys.FileSystem;
+#else
+import openfl.Assets;
 #end
 
 class ModLoaderPsych implements IModResolver
@@ -15,14 +17,17 @@ class ModLoaderPsych implements IModResolver
 
 	public function resolve(mod:ModInfo, modKey:String):Null<String>
 	{
-		#if sys
 		for(root in mod.assetRoots)
 		{
 			var full = '$root/$modKey';
+			#if sys
 			if(FileSystem.exists(full))
 				return full;
+			#else
+			if(Assets.exists(full))
+				return full;
+			#end
 		}
-		#end
 		return null;
 	}
 }

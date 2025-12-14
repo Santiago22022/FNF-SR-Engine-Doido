@@ -17,6 +17,7 @@ import states.editors.ChartingState;
 import subStates.menu.DeleteScoreSubState;
 import backend.song.Timings;
 import flixel.util.FlxStringUtil;
+import backend.system.ModPaths;
 
 using StringTools;
 
@@ -29,6 +30,13 @@ typedef FreeplaySong = {
 class FreeplayState extends MusicBeatState
 {
 	var songList:Array<FreeplaySong> = [];
+
+	function hasSong(name:String):Bool
+	{
+		for(song in songList)
+			if(song.name == name) return true;
+		return false;
+	}
 	
 	function addSong(name:String, icon:String, diffs:Array<String>)
 	{
@@ -90,6 +98,39 @@ class FreeplayState extends MusicBeatState
 
 			// finally adding the song
 			addSong(songName, "face", diffArray);
+		}
+
+		// mod songs (Psych-style data/<song>/<song>-<diff>.json)
+		var chartFiles = ModPaths.listDirRelative('data', null, [".json"], true);
+		var modSongDiffs:Map<String, Array<String>> = new Map();
+		for(file in chartFiles)
+		{
+			if(file == null) continue;
+			var parts = file.split("/");
+			if(parts.length < 2) continue;
+			var folder = parts[0];
+			var fname = parts[parts.length - 1];
+			if(fname.startsWith("events")) continue;
+			if(!fname.endsWith(".json")) continue;
+
+			var diff = fname.substr(0, fname.length - 5); // drop .json
+			if(diff.startsWith(folder + "-"))
+				diff = diff.substr(folder.length + 1);
+			if(diff.toLowerCase() == "events") continue;
+			if(diff == "") diff = "normal";
+
+			if(!modSongDiffs.exists(folder))
+				modSongDiffs.set(folder, []);
+			var diffs = modSongDiffs.get(folder);
+			if(!diffs.contains(diff))
+				diffs.push(diff);
+		}
+
+		for(songName => diffs in modSongDiffs)
+		{
+			if(hasSong(songName)) continue;
+			if(diffs.length <= 0) diffs = SongData.defaultDiffs;
+			addSong(songName, "face", diffs);
 		}
 
 		grpItems = new FlxGroup();
