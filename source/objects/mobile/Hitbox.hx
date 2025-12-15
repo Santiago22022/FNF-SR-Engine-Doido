@@ -8,6 +8,9 @@ import flixel.tweens.FlxTween;
 import flixel.tweens.FlxEase;
 import flixel.input.FlxInput.FlxInputState;
 import flixel.input.touch.FlxTouch;
+import flixel.math.FlxRect;
+import flixel.math.FlxPoint;
+import flixel.util.FlxSpriteUtil;
 
 class Hitbox extends FlxSpriteGroup
 {
@@ -17,11 +20,16 @@ class Hitbox extends FlxSpriteGroup
 	var hbxMap:Map<String, HitboxButton> = [];
 	var touchActive:Array<Bool> = [false, false, false, false];
 	var lastTouchId:Array<Int> = [-1, -1, -1, -1];
+	var justPressedState:Array<Bool> = [false, false, false, false];
+	var justReleasedState:Array<Bool> = [false, false, false, false];
+	var touchBindings:Map<Int, String> = new Map(); // touchId -> direction
 
 	var assetModifier:String = "base";
 	var margin:Float = 16;
 	var resizeHandlerAdded:Bool = false;
 	static final VALID_STYLES:Array<String> = ["base", "doido", "pixel"];
+	public var debugDraw:Bool = false;
+	var debugLayer:FlxSprite;
 	
 	public function new(assetModifier:String = "base")
 	{
@@ -44,6 +52,11 @@ class Hitbox extends FlxSpriteGroup
 		reflow();
 		FlxG.signals.gameResized.add(onResize);
 		resizeHandlerAdded = true;
+
+		debugLayer = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, 0x0, true);
+		debugLayer.alpha = 0.6;
+		debugLayer.visible = false;
+		add(debugLayer);
 	}
 
 	public function toggleHbx(active)
@@ -61,6 +74,13 @@ class Hitbox extends FlxSpriteGroup
 			touchActive[i] = false;
 			lastTouchId[i] = -1;
 		}
+	}
+
+	override public function update(elapsed:Float):Void
+	{
+		super.update(elapsed);
+		refreshTouches();
+		updateButtonVisuals();
 	}
 
 	override public function destroy():Void
@@ -93,11 +113,11 @@ class Hitbox extends FlxSpriteGroup
 
 		switch(inputState) {
 			case PRESSED:
-				return touchActive[dirIndex] || button.pressed;
+				return touchActive[dirIndex];
 			case JUST_PRESSED:
-				return button.justPressed;
+				return justPressedState[dirIndex];
 			case RELEASED | JUST_RELEASED:
-				return (!touchActive[dirIndex] && button.justReleased);
+				return (!touchActive[dirIndex] && justReleasedState[dirIndex]);
 			default:
 				return false;
 		}
@@ -108,40 +128,177 @@ class Hitbox extends FlxSpriteGroup
 
 	function refreshTouches():Void
 	{
-		// reset activity, will be marked true if touch still overlaps
 		for(i in 0...touchActive.length)
+		{
 			touchActive[i] = false;
+			lastTouchId[i] = -1;
+			justPressedState[i] = false;
+			justReleasedState[i] = false;
+		}
 
+		// release bindings that ended
+		var activeIds:Map<Int, Bool> = new Map();
+		for(touch in FlxG.touches.list)
+			if(touch != null)
+				activeIds.set(touch.touchPointID, true);
+
+		var dead:Array<Int> = [];
+		for(id in touchBindings.keys())
+			if(!activeIds.exists(id))
+				dead.push(id);
+		for(id in dead)
+			touchBindings.remove(id);
+
+		// release bindings that no longer overlap
 		for(touch in FlxG.touches.list)
 		{
 			if(touch == null) continue;
-
-			for(dir in CoolUtil.directions)
+			var dir = touchBindings.get(touch.touchPointID);
+			if(dir != null)
 			{
-				var idx = CoolUtil.directions.indexOf(dir);
 				var button = hbxMap.get(dir);
-				if(button == null || !button.isActive) continue;
-
-				// reuse last touch ID to make holds stable
-				if(lastTouchId[idx] != -1 && touchIDMatches(touch, lastTouchId[idx]) && button.overlapsPoint(touch.getWorldPosition()))
+				if(button == null || !button.isActive || !overlapsButton(touch, button))
 				{
-					touchActive[idx] = true;
-					continue;
-				}
-
-				// otherwise check overlap and assign
-				if(button.overlapsPoint(touch.getWorldPosition()))
-				{
-					touchActive[idx] = true;
-					lastTouchId[idx] = touch.touchPointID;
+					touchBindings.remove(touch.touchPointID);
+					var idx = CoolUtil.directions.indexOf(dir);
+					if(idx >= 0)
+						justReleasedState[idx] = true;
 				}
 			}
 		}
 
-		// clear dead touch IDs
-		for(i in 0...touchActive.length)
-			if(!touchActive[i])
-				lastTouchId[i] = -1;
+		// preserve existing bindings if still overlapping
+		for(touch in FlxG.touches.list)
+		{
+			if(touch == null) continue;
+			var dir = touchBindings.get(touch.touchPointID);
+			if(dir != null)
+			{
+				var button = hbxMap.get(dir);
+				if(button != null && button.isActive && overlapsButton(touch, button))
+				{
+					var idx = CoolUtil.directions.indexOf(dir);
+					if(idx >= 0)
+					{
+						touchActive[idx] = true;
+						lastTouchId[idx] = touch.touchPointID;
+					}
+					continue;
+				}
+				else
+					touchBindings.remove(touch.touchPointID);
+			}
+		}
+
+		// capture new touches
+		for(touch in FlxG.touches.list)
+		{
+			if(touch == null) continue;
+			if(touchBindings.exists(touch.touchPointID)) continue;
+
+			var bestDir:String = null;
+			var bestDist:Float = Math.POSITIVE_INFINITY;
+
+			for(dir in CoolUtil.directions)
+			{
+				var button = hbxMap.get(dir);
+				if(button == null || !button.isActive) continue;
+				if(!overlapsButton(touch, button)) continue;
+
+				var dist = distanceToCenter(touch, button);
+				if(dist < bestDist)
+				{
+					bestDist = dist;
+					bestDir = dir;
+				}
+			}
+
+			if(bestDir != null)
+			{
+				touchBindings.set(touch.touchPointID, bestDir);
+				var idx = CoolUtil.directions.indexOf(bestDir);
+				if(idx >= 0)
+				{
+					touchActive[idx] = true;
+					lastTouchId[idx] = touch.touchPointID;
+					justPressedState[idx] = true;
+				}
+			}
+		}
+
+		// mark actives by bindings
+		for(id => dir in touchBindings)
+		{
+			var idx = CoolUtil.directions.indexOf(dir);
+			if(idx >= 0)
+				touchActive[idx] = true;
+		}
+	}
+
+	function overlapsButton(touch:FlxTouch, button:HitboxButton):Bool
+	{
+		if(touch == null || button == null) return false;
+		var cam = (button.cameras != null && button.cameras.length > 0) ? button.cameras[0] : FlxG.camera;
+		var pt = FlxPoint.get();
+		touch.getWorldPosition(cam, pt);
+		var result = button.overlapsPoint(pt, true, cam);
+		pt.put();
+		return result;
+	}
+
+	function distanceToCenter(touch:FlxTouch, button:HitboxButton):Float
+	{
+		var cam = (button.cameras != null && button.cameras.length > 0) ? button.cameras[0] : FlxG.camera;
+		var pt = FlxPoint.get();
+		touch.getWorldPosition(cam, pt);
+		var dx = pt.x - (button.x + button.width / 2);
+		var dy = pt.y - (button.y + button.height / 2);
+		pt.put();
+		return dx * dx + dy * dy;
+	}
+
+	function drawDebugLayer():Void
+	{
+		if(debugLayer == null) return;
+		debugLayer.makeGraphic(FlxG.width, FlxG.height, 0x00000000, true);
+		var cam = (cameras != null && cameras.length > 0) ? cameras[0] : FlxG.camera;
+		for(dir in CoolUtil.directions)
+		{
+			var button = hbxMap.get(dir);
+			if(button == null) continue;
+			var rect = button.getScreenBounds(cam);
+			flixel.util.FlxSpriteUtil.drawRect(debugLayer, rect.x, rect.y, rect.width, rect.height, 0x3344FF44);
+		}
+
+		for(touch in FlxG.touches.list)
+		{
+			if(touch == null) continue;
+			var pt = FlxPoint.get();
+			touch.getWorldPosition(cam, pt);
+			flixel.util.FlxSpriteUtil.drawRect(debugLayer, pt.x - 4, pt.y - 4, 8, 8, 0x88FF0000);
+			pt.put();
+		}
+	}
+
+	function updateButtonVisuals():Void
+	{
+		for(dir in CoolUtil.directions)
+		{
+			var idx = CoolUtil.directions.indexOf(dir);
+			var button = hbxMap.get(dir);
+			if(button == null) continue;
+			if(touchActive[idx])
+				button.setAlpha(true);
+			else if(!button.justPressed)
+				button.setAlpha(false);
+		}
+
+		#if debug
+		if(debugDraw)
+			drawDebugLayer();
+		if(debugLayer != null)
+			debugLayer.visible = debugDraw;
+		#end
 	}
 
 	inline function touchIDMatches(touch:flixel.input.touch.FlxTouch, id:Int):Bool

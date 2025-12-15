@@ -26,6 +26,9 @@ import flixel.util.FlxTimer;
 import flixel.addons.display.FlxRuntimeShader;
 import backend.utils.ObjectPool;
 import backend.utils.InputManager;
+import backend.input.InputPipeline;
+import backend.time.Timebase;
+import backend.time.HitWindows;
 import backend.mobile.SafeArea;
 import backend.mobile.MobileTuner;
 import openfl.filters.BitmapFilter;
@@ -290,7 +293,8 @@ class PlayState extends MusicBeatState
 		callScript("create");
 		
 		stageBuild = new Stage();
-		stageBuild.reloadStageFromSong(SONG.song, SONG.gfVersion);
+		var stageName:String = (Reflect.hasField(SONG, "stage") && SONG.stage != null) ? SONG.stage : SONG.song;
+		stageBuild.reloadStageFromSong(stageName, SONG.gfVersion);
 		add(stageBuild);
 
 		classicZoom = defaultCamZoom;
@@ -483,6 +487,27 @@ class PlayState extends MusicBeatState
 		pressed = inputManager.pressed;
 		justPressed = inputManager.justPressed;
 		released = inputManager.released;
+		useLegacyMode = SaveData.data.get("Legacy Mode");
+		timingPreset = Std.string(SaveData.data.get("Timing Preset"));
+		scrollPreset = Std.string(SaveData.data.get("Scroll Preset"));
+		inputPreset = Std.string(SaveData.data.get("Input Preset"));
+		var presetCfg = HitWindows.getPreset(timingPreset);
+		useInputBuffer = SaveData.data.get("Input Buffer");
+		useAntiMash = SaveData.data.get("Anti Mash");
+		inputBufferEarly = Std.int(SaveData.data.get("Input Early Buffer"));
+		inputBufferLate = Std.int(SaveData.data.get("Input Late Buffer"));
+		if(inputPreset.toLowerCase() == "buffered")
+		{
+			useInputBuffer = true;
+			inputBufferEarly = presetCfg.early;
+			inputBufferLate = presetCfg.late;
+			useAntiMash = presetCfg.spamGuard;
+		}
+		inputPipeline = new InputPipeline();
+		inputPipeline.configure(useInputBuffer, inputBufferEarly, inputBufferLate, useAntiMash);
+		timebase = new Timebase();
+		timebase.configure(!useLegacyMode, 18, 0.35);
+		timebase.setInitial(Conductor.songPos);
 		
 		if(hasCutscene() && !playedCutscene)
 		{
@@ -583,6 +608,8 @@ class PlayState extends MusicBeatState
 		var countTimer = new FlxTimer().start(Conductor.crochet / 1000, function(tmr:FlxTimer)
 		{
 			Conductor.songPos = -Conductor.crochet * (4 - daCount);
+			if(timebase != null)
+				timebase.setInitial(Conductor.songPos);
 			
 			if(daCount == 0)
 			{
@@ -720,6 +747,8 @@ class PlayState extends MusicBeatState
 	public function startSong()
 	{
 		startedSong = true;
+		if(timebase != null)
+			timebase.start();
 		if(psychLua != null)
 			psychLua.onSongStart();
 		for(music in musicList)
@@ -1028,6 +1057,16 @@ class PlayState extends MusicBeatState
 	public var justPressed:Array<Bool> 	= [false, false, false, false];
 	public var released:Array<Bool> 	= [false, false, false, false];
 	var inputManager:InputManager = null;
+	var inputPipeline:InputPipeline = null;
+	var useInputBuffer:Bool = false;
+	var useAntiMash:Bool = false;
+	var inputBufferEarly:Int = 0;
+	var inputBufferLate:Int = 0;
+	var useLegacyMode:Bool = true;
+	var timingPreset:String = "Legacy";
+	var scrollPreset:String = "Legacy";
+	var inputPreset:String = "Legacy";
+	public var timebase:Timebase = null;
 	var focusSignalsHooked:Bool = false;
 		
 	var playerSinging:Bool = false;
@@ -1197,6 +1236,84 @@ class PlayState extends MusicBeatState
 
 		return justPressed[0] || justPressed[1] || justPressed[2] || justPressed[3];
 	}
+
+	inline function resolveBufferedPress(strumline:Strumline, lane:Int, songPos:Float):Bool
+	{
+		if(inputPipeline == null || !inputPipeline.hasPress(lane))
+			return false;
+
+		var evt = inputPipeline.peekPress(lane);
+		if(evt == null)
+			return false;
+
+		var bestNote:Note = null;
+		var bestAbs:Float = Math.POSITIVE_INFINITY;
+		var closestDelta:Float = Math.POSITIVE_INFINITY;
+		var closestSigned:Float = 0;
+		var baseEarly:Float = Timings.minTiming + inputPipeline.earlyMs;
+		var baseLate:Float = Timings.minTiming + inputPipeline.lateMs;
+
+		for(note in strumline.noteGroup)
+		{
+			if(note == null || note.noteData != lane || note.missed || note.gotHit)
+				continue;
+
+			var minTiming:Float = (note.mustMiss ? Timings.getTimings("good")[1] : Timings.minTiming);
+			var earlyWin:Float = minTiming + inputPipeline.earlyMs;
+			var lateWin:Float = minTiming + inputPipeline.lateMs;
+			var delta:Float = note.songTime + Conductor.inputOffset - evt.timeMs;
+			var absDelta:Float = Math.abs(delta);
+
+			if(absDelta < closestDelta)
+			{
+				closestDelta = absDelta;
+				closestSigned = delta;
+			}
+
+			if(delta >= -earlyWin && delta <= lateWin)
+			{
+				if(bestNote == null || absDelta < bestAbs || (absDelta == bestAbs && note.songTime < bestNote.songTime))
+				{
+					bestNote = note;
+					bestAbs = absDelta;
+				}
+			}
+		}
+
+		if(bestNote != null)
+		{
+			inputPipeline.consumePress(lane);
+			checkNoteHit(bestNote, strumline);
+			return true;
+		}
+
+		var shouldDiscard:Bool = false;
+		if(closestDelta == Math.POSITIVE_INFINITY)
+			shouldDiscard = true;
+		else if(closestSigned >= 0 && closestDelta > baseEarly)
+			shouldDiscard = true;
+		else if(closestSigned < 0 && closestDelta > baseLate)
+			shouldDiscard = true;
+		else if(songPos - evt.timeMs > baseLate + 32)
+			shouldDiscard = true;
+
+		if(shouldDiscard)
+		{
+			inputPipeline.consumePress(lane);
+			if(startedCountdown)
+			{
+				if(ghostTapping == "NEVER" || (ghostTapping == "WHILE IDLING" && !isIdling))
+				{
+					var ghost = pooledGhostNote();
+					ghost.updateData(0, lane, "none", assetModifier);
+					onNoteMiss(ghost, strumline, true);
+				}
+			}
+			return true;
+		}
+
+		return false;
+	}
 	
 	override function update(elapsed:Float)
 	{
@@ -1304,11 +1421,22 @@ class PlayState extends MusicBeatState
 		#end
 		
 		// syncSong
-		if(startedCountdown)
+		if(timebase != null)
+		{
+			Conductor.songPos = timebase.tick(elapsed, inst, songSpeed, startedCountdown && !paused);
+		}
+		else if(startedCountdown)
 			Conductor.songPos += elapsed * 1000 * songSpeed;
 
 		var songPos:Float = Conductor.songPos;
 		var anyJustPressed:Bool = updateInputStates();
+		if(inputPipeline != null)
+		{
+			inputPipeline.configure(useInputBuffer, inputBufferEarly, inputBufferLate, useAntiMash);
+			inputPipeline.update(songPos, Conductor.inputOffset, pressed, justPressed, released);
+			if(useInputBuffer || useAntiMash)
+				anyJustPressed = anyJustPressed || inputPipeline.hasPendingPress();
+		}
 
 		playerSinging = false;
 
@@ -1386,6 +1514,7 @@ class PlayState extends MusicBeatState
 		
 		if(anyJustPressed)
 		{
+			var pipelineActive:Bool = (inputPipeline != null && (useInputBuffer || useAntiMash));
 			for(strumline in strumlines.members)
 			{
 				if(strumline == null)
@@ -1399,6 +1528,12 @@ class PlayState extends MusicBeatState
 				
 				for(i in 0...justPressed.length)
 				{
+					if(pipelineActive)
+					{
+						resolveBufferedPress(strumline, i, songPos);
+						continue;
+					}
+
 					if(justPressed[i])
 					{
 						var cache = getFrameCacheFor(strumline);
@@ -1876,14 +2011,17 @@ class PlayState extends MusicBeatState
 		
 		if(inst.playing)
 		{
-			// syncs the conductor
-			if(Math.abs(Conductor.songPos - inst.time) >= 20 && Conductor.songPos - inst.time <= 5000)
+			if(timebase != null)
+			{
+				timebase.syncWithAudio(inst);
+				Conductor.songPos = timebase.songPos;
+			}
+			else if(Math.abs(Conductor.songPos - inst.time) >= 20 && Conductor.songPos - inst.time <= 5000)
 			{
 				Logs.print('synced song ${Conductor.songPos} to ${inst.time}');
 				Conductor.songPos = inst.time;
 			}
 			
-			// syncs the other music to the inst
 			for(music in musicList)
 			{
 				if(music == null || music == inst) continue;

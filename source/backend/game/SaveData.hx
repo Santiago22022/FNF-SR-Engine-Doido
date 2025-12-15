@@ -5,6 +5,12 @@ import flixel.util.FlxSave;
 import openfl.system.Capabilities;
 import backend.song.Conductor;
 import backend.song.Highscore;
+import haxe.DynamicAccess;
+import backend.game.SettingsStore;
+import backend.game.SettingsModel;
+import backend.game.SettingsDefaults;
+import backend.game.SettingsModel;
+import backend.system.ModLoader;
 
 /*
 	Save data such as options and other things.
@@ -17,7 +23,7 @@ enum SettingType
 }
 class SaveData
 {
-	public static var data:Map<String, Dynamic> = [];
+	public static var data:DynamicAccess<Dynamic> = new DynamicAccess<Dynamic>();
 	public static var displaySettings:Map<String, Dynamic> = [
 		/*
 		*
@@ -114,6 +120,51 @@ class SaveData
 			SELECTOR,
 			"Only works when Hitsounds aren't off",
 			[0, 100]
+		],
+		"Input Buffer" => [
+			false,
+			CHECKMARK,
+			"Buffers inputs in milliseconds to reduce dropped hits. Default off for legacy feel."
+		],
+		"Input Early Buffer" => [
+			0,
+			SELECTOR,
+			"Extra early buffer (ms) for the input pipeline. Requires Input Buffer.",
+			[0, 120]
+		],
+		"Input Late Buffer" => [
+			0,
+			SELECTOR,
+			"Extra late buffer (ms) for the input pipeline. Requires Input Buffer.",
+			[0, 120]
+		],
+		"Anti Mash" => [
+			false,
+			CHECKMARK,
+			"Blocks OS key-repeat spam and ultra-fast mash per lane."
+		],
+		"Timing Preset" => [
+			"Legacy",
+			SELECTOR,
+			"Pick timing windows preset (Legacy/Arcade/Lenient/Tight).",
+			["Legacy", "Arcade", "Lenient", "Tight"]
+		],
+		"Scroll Preset" => [
+			"Legacy",
+			SELECTOR,
+			"Scroll behavior preset (Legacy or Stable).",
+			["Legacy", "Stable"]
+		],
+		"Input Preset" => [
+			"Legacy",
+			SELECTOR,
+			"Input pipeline preset (Legacy/Buffered).",
+			["Legacy", "Buffered"]
+		],
+		"Legacy Mode" => [
+			true,
+			CHECKMARK,
+			"Use classic feel. Disable to try the new timing/scroll pipeline."
 		],
 		/*
 		*
@@ -245,9 +296,10 @@ class SaveData
 	public static var saveControls:FlxSave = new FlxSave();
 	public static function init()
 	{
-		saveSettings.bind("settings"); // use these for settings
+		saveSettings.bind("settings"); // legacy binding for volume/muted and fallback
 		saveControls.bind("controls"); // controls :D
 		FlxG.save.bind("save-data"); // these are for other stuff, not recquiring to access the SaveData class
+		ModLoader.refresh(); // ensure mods are indexed before any Paths lookups
 		
 		load();
 		Controls.load();
@@ -259,16 +311,15 @@ class SaveData
 	
 	public static function load()
 	{
-		if(saveSettings.data.volume != null)
-			FlxG.sound.volume = saveSettings.data.volume;
-		if(saveSettings.data.muted != null)
-			FlxG.sound.muted  = saveSettings.data.muted;
+		var model = SettingsStore.load();
 
-		var storedSettings:Dynamic = saveSettings.data.settings;
-		if(storedSettings != null && Reflect.hasField(storedSettings, "keys"))
-			data = cast storedSettings;
-		else
-			data = new Map<String, Dynamic>();
+		// migrate volume/muted legacy
+		if(model.settings != null)
+			data = model.settings;
+		if(saveSettings.data.volume != null)
+			data.set("volume", saveSettings.data.volume);
+		if(saveSettings.data.muted != null)
+			data.set("muted", saveSettings.data.muted);
 
 		migrateLegacySettings();
 		syncSettingsWithDefaults();
@@ -279,7 +330,11 @@ class SaveData
 	
 	public static function save()
 	{
-		saveSettings.data.settings = data;
+		var model:SettingsModel = {
+			schemaVersion: SettingsDefaults.CURRENT_SCHEMA,
+			settings: data
+		};
+		SettingsStore.saveModel(model);
 		saveSettings.flush();
 		update();
 	}
@@ -350,7 +405,11 @@ class SaveData
 		for(key in keysToRemove)
 			data.remove(key);
 
-		saveSettings.data.settings = data;
+		var model:SettingsModel = {
+			schemaVersion: SettingsDefaults.CURRENT_SCHEMA,
+			settings: data
+		};
+		SettingsStore.saveModel(model);
 	}
 
 	static function addDynamicOptions()

@@ -7,6 +7,12 @@ import flixel.math.FlxPoint;
 import states.PlayState;
 import objects.BackgroundGirls;
 import backend.game.IStepHit;
+import backend.system.ModPaths;
+import tjson.TJSON;
+#if sys
+import sys.io.File;
+import sys.FileSystem;
+#end
 
 class Stage extends FlxGroup implements IStepHit
 {
@@ -44,17 +50,23 @@ class Stage extends FlxGroup implements IStepHit
 	{
 		var stageList:Array<String> = [];
 		
-		stageList = switch(song)
+		var normalized = song == null ? "" : song.toLowerCase().trim();
+		if(normalized != "" && normalized != "test")
+			stageList = [normalized];
+		else
 		{
-			default: ["stage"];
-			
-			case "collision": ["mugen"];
-			
-			case "senpai"|"roses": 	["school"];
-			case "thorns": 			["school-evil"];
-			
-			//case "template": ["preload1", "preload2", "starting-stage"];
-		};
+			stageList = switch(song)
+			{
+				default: ["stage"];
+				
+				case "collision": ["mugen"];
+				
+				case "senpai"|"roses": 	["school"];
+				case "thorns": 			["school-evil"];
+				
+				//case "template": ["preload1", "preload2", "starting-stage"];
+			};
+		}
 
 		//this stops you from fucking stuff up by changing this mid song
 		lowQuality = SaveData.data.get("Low Quality");
@@ -131,6 +143,63 @@ class Stage extends FlxGroup implements IStepHit
 	public function loadCode(curStage:String = "")
 	{
 		gfVersion = getGfVersion(curStage);
+		if(loadStageFromJson(curStage))
+		{
+			this.curStage = curStage;
+			return;
+		}
+		// Generic loader for mod stages (Psych-style): look for stageback/front/curtains under images/stages/<curStage>
+		if(curStage != null && curStage.trim() != "" && scripted.contains(curStage))
+			return;
+
+		if(curStage != null && curStage.trim() != "" && !["stage","school","school-evil"].contains(curStage.toLowerCase()))
+		{
+			var base = 'stages/$curStage';
+			var backPath = 'stages/$curStage/stageback';
+			var frontPath = 'stages/$curStage/stagefront';
+			var curtainsPath = 'stages/$curStage/stagecurtains';
+			var anyFound:Bool = false;
+
+			if(Paths.fileExists('$backPath.png'))
+			{
+				var bg = new FlxSprite(-600, -600).loadGraphic(Paths.image(backPath));
+				bg.scrollFactor.set(0.6,0.6);
+				add(bg);
+				anyFound = true;
+			}
+			if(Paths.fileExists('$frontPath.png'))
+			{
+				var front = new FlxSprite(-580, 440).loadGraphic(Paths.image(frontPath));
+				add(front);
+				anyFound = true;
+			}
+			if(!lowQuality && Paths.fileExists('$curtainsPath.png'))
+			{
+				var curtains = new FlxSprite(-600, -400).loadGraphic(Paths.image(curtainsPath));
+				curtains.scrollFactor.set(1.4,1.4);
+				foreground.add(curtains);
+				anyFound = true;
+			}
+			if(!anyFound)
+			{
+				var files = ModPaths.listDir('images/$base', null, [".png", ".PNG"], false);
+				for(file in files)
+				{
+					var name = file;
+					if(name.lastIndexOf(".") != -1)
+						name = name.substr(0, name.lastIndexOf("."));
+					var spr = new FlxSprite().loadGraphic(Paths.image('$base/$name'));
+					add(spr);
+					anyFound = true;
+				}
+			}
+			if(anyFound)
+			{
+				this.curStage = curStage;
+				return;
+			}
+		}
+
 		switch(curStage)
 		{
 			default:
@@ -223,6 +292,128 @@ class Stage extends FlxGroup implements IStepHit
 				bg.scale.set(6,6);
 				add(bg);
 		}
+	}
+
+	function loadStageFromJson(stage:String):Bool
+	{
+		if(stage == null || stage.trim() == "")
+			return false;
+
+		var base = 'stages/$stage';
+		var resolved:Null<String> = ModPaths.resolveWithExtensions(base, null, [".json", ".JSON"]);
+		if(resolved == null)
+			resolved = Paths.fileExists('$base.json') ? '$base.json' : null;
+		if(resolved == null)
+			return false;
+
+		var raw:String = null;
+		#if sys
+		if(FileSystem.exists(resolved) && !FileSystem.isDirectory(resolved))
+			raw = File.getContent(resolved);
+		#end
+		if(raw == null || raw.trim() == "")
+			raw = ModPaths.readText(resolved);
+		if(raw == null || raw.trim() == "")
+			return false;
+
+		var data:Dynamic = null;
+		try {
+			data = TJSON.parse(raw);
+		} catch(e) {
+			return false;
+		}
+		if(data == null)
+			return false;
+
+		var directory:String = stage;
+		if(Reflect.hasField(data, "directory"))
+			directory = Std.string(Reflect.field(data, "directory"));
+
+		if(Reflect.hasField(data, "defaultZoom"))
+			camZoom = Std.parseFloat(Std.string(Reflect.field(data, "defaultZoom")));
+		if(Reflect.hasField(data, "gfVersion"))
+			gfVersion = Std.string(Reflect.field(data, "gfVersion"));
+
+		inline function setPoint(field:String, pt:FlxPoint)
+		{
+			if(Reflect.hasField(data, field))
+			{
+				var arr:Dynamic = Reflect.field(data, field);
+				if(arr != null && Std.isOfType(arr, Array) && (arr:Array<Dynamic>).length >= 2)
+				{
+					var a:Array<Dynamic> = cast arr;
+					pt.set(Std.parseFloat(Std.string(a[0])), Std.parseFloat(Std.string(a[1])));
+				}
+			}
+		}
+		setPoint("boyfriend", bfPos);
+		setPoint("opponent", dadPos);
+		setPoint("girlfriend", gfPos);
+
+		setPoint("camera_boyfriend", bfCam);
+		setPoint("camera_opponent", dadCam);
+		setPoint("camera_girlfriend", gfCam);
+
+		var sprites:Dynamic = Reflect.field(data, "sprites");
+		var any:Bool = false;
+		if(sprites != null && Std.isOfType(sprites, Array))
+		{
+			for(entry in (sprites:Array<Dynamic>))
+			{
+				if(entry == null) continue;
+				var image:String = Std.string(Reflect.field(entry, "image"));
+				if(image == null || image.trim() == "") continue;
+				var x:Float = Std.parseFloat(Std.string(Reflect.field(entry, "x")));
+				var y:Float = Std.parseFloat(Std.string(Reflect.field(entry, "y")));
+				if(Math.isNaN(x)) x = 0;
+				if(Math.isNaN(y)) y = 0;
+				var scrollX:Float = Reflect.hasField(entry, "scrollX") ? Std.parseFloat(Std.string(Reflect.field(entry, "scrollX"))) : 1;
+				var scrollY:Float = Reflect.hasField(entry, "scrollY") ? Std.parseFloat(Std.string(Reflect.field(entry, "scrollY"))) : 1;
+				var scale:Float = Reflect.hasField(entry, "scale") ? Std.parseFloat(Std.string(Reflect.field(entry, "scale"))) : 1;
+				var foregroundSprite:Bool = Reflect.hasField(entry, "foreground") ? (Reflect.field(entry, "foreground") == true) : false;
+				var pathBase = 'stages/$directory/$image';
+
+				var spr:FlxSprite = new FlxSprite(x, y);
+				var useAtlas:Bool = false;
+				if(Paths.fileExists('$pathBase.xml'))
+				{
+					spr.frames = Paths.getSparrowAtlas(pathBase);
+					useAtlas = spr.frames != null;
+				}
+				if(!useAtlas && Paths.fileExists('$pathBase.png'))
+					spr.loadGraphic(Paths.image(pathBase));
+				spr.scrollFactor.set(scrollX, scrollY);
+				spr.scale.set(scale, scale);
+				spr.updateHitbox();
+				var animations:Dynamic = Reflect.field(entry, "animations");
+				if(useAtlas && animations != null && Std.isOfType(animations, Array))
+				{
+					for(animEntry in (animations:Array<Dynamic>))
+					{
+						if(animEntry == null) continue;
+						var animName:String = Std.string(Reflect.field(animEntry, "anim"));
+						var prefix:String = Std.string(Reflect.field(animEntry, "name"));
+						if(animName == null || prefix == null) continue;
+						var fps:Int = Std.int(Reflect.hasField(animEntry, "fps") ? Std.parseInt(Std.string(Reflect.field(animEntry, "fps"))) : 24);
+						var loop:Bool = Reflect.hasField(animEntry, "loop") ? (Reflect.field(animEntry, "loop") == true) : true;
+						spr.animation.addByPrefix(animName, prefix, fps, loop);
+					}
+					if(spr.animation != null)
+					{
+						var names = spr.animation.getNameList();
+						if(names != null && names.length > 0)
+							spr.animation.play(names[0], true);
+					}
+				}
+
+				if(foregroundSprite)
+					foreground.add(spr);
+				else
+					add(spr);
+				any = true;
+			}
+		}
+		return any;
 	}
 
 	public function getGfVersion(curStage:String)

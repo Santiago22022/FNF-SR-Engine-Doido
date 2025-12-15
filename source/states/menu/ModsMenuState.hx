@@ -146,6 +146,7 @@ class ModsMenuState extends MusicBeatState
 		if(dirty)
 		{
 			ModConfig.persistFrom(mods);
+			ModLoader.savePsychModsList(mods);
 			ModLoader.refresh();
 		}
 		Main.switchState(new OptionsState());
@@ -164,7 +165,8 @@ class ModsMenuState extends MusicBeatState
 	{
 		super.update(elapsed);
 
-		if(SaveData.data.get("useModMenuTouchList") && FlxG.touches.list.length > 0)
+		#if FLX_TOUCH
+		if(SaveData.data.get("useModMenuTouchList") && FlxG.touches != null && FlxG.touches.list.length > 0)
 		{
 			var touch = FlxG.touches.list[0];
 			if(touch.justPressed)
@@ -183,6 +185,7 @@ class ModsMenuState extends MusicBeatState
 			if(touch.justReleased)
 				isDragging = false;
 		}
+		#end
 
 		if(Controls.justPressed(UI_UP)) updateSelection(-1);
 		if(Controls.justPressed(UI_DOWN)) updateSelection(1);

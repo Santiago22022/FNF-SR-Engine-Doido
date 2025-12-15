@@ -20,7 +20,17 @@ class ModPaths
 
 	public static function resolveWithExtensions(base:String, ?library:String, exts:Array<String>):Null<String>
 	{
+		if(exts == null) exts = [];
+		var extsToCheck:Array<String> = [];
 		for(ext in exts)
+		{
+			if(ext == null) continue;
+			extsToCheck.push(ext);
+			var upper = ext.toUpperCase();
+			if(!extsToCheck.contains(upper))
+				extsToCheck.push(upper);
+		}
+		for(ext in extsToCheck)
 		{
 			var res = resolveAssetPath('$base$ext', library);
 			if(res != null)

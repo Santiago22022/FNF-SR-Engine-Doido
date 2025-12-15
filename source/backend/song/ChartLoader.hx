@@ -111,9 +111,15 @@ class ChartLoader
 
 	public static function getEvents(EVENTS:EventSong):Array<EventNote>
 	{
+		if(EVENTS == null || EVENTS.songEvents == null)
+			return [];
+
 		var unspawnEvents:Array<EventNote> = [];
 		for(eventList in EVENTS.songEvents)
 		{
+			if(eventList == null || eventList.length < 3 || eventList[2] == null)
+				continue;
+
 			for(i in 0...eventList[2].length)
 			{
 				var event = eventList[2][i];

@@ -57,6 +57,14 @@ class OptionsSubState extends MusicBeatSubState
             #end
             "Hitsounds",
             "Hitsound Volume",
+            "Input Buffer",
+            "Input Early Buffer",
+            "Input Late Buffer",
+            "Anti Mash",
+            "Timing Preset",
+            "Scroll Preset",
+            "Input Preset",
+            "Legacy Mode",
 		],
 		"appearance" => [
             "Note Splashes",

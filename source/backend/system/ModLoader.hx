@@ -17,6 +17,13 @@ import openfl.Assets;
 import openfl.utils.AssetType;
 #end
 
+#if sys
+typedef PsychList = {
+	var order:Array<String>;
+	var enabled:Array<String>;
+}
+#end
+
 class ModLoader
 {
 	#if sys
@@ -97,6 +104,26 @@ class ModLoader
 		dirty = true;
 	}
 
+	public static function savePsychModsList(mods:Array<ModInfo>):Void
+	{
+		#if sys
+		var path = Path.normalize('$modRoot/modsList.txt');
+		var lines:Array<String> = [];
+		for(mod in mods)
+		{
+			var folder = Path.withoutDirectory(mod.path);
+			if(folder == null || folder.trim() == "")
+				folder = mod.id;
+			lines.push('$folder|${mod.enabled ? "1" : "0"}');
+		}
+		try {
+			sys.io.File.saveContent(path, lines.join("\n"));
+		} catch(e) {
+			Logs.print('Failed to write modsList.txt: $e', WARNING);
+		}
+		#end
+	}
+
 	public static function refresh():Array<ModInfo>
 	{
 		dirty = false;
@@ -109,8 +136,12 @@ class ModLoader
 		buildSharedFolders();
 
 		var preferredOrder:Array<String> = [];
+		var psychList:PsychList = null;
 		#if sys
 		preferredOrder = ModConfig.order.copy();
+		psychList = loadPsychList();
+		if(psychList != null && psychList.order.length > 0)
+			preferredOrder = psychList.order.copy();
 		var fileOrder = loadOrderList();
 		for(id in fileOrder)
 			if(!preferredOrder.contains(id))
@@ -140,6 +171,8 @@ class ModLoader
 		#end
 
 		applyUserConfig(allMods, preferredOrder);
+		if(psychList != null)
+			applyPsychEnable(allMods, psychList.enabled);
 		allMods.sort(function(a:ModInfo, b:ModInfo) {
 			return sortMods(preferredOrder, a, b);
 		});
@@ -355,6 +388,11 @@ class ModLoader
 		if(hasPolymod || Reflect.hasField(data, "api_version"))
 			return "v-slice";
 
+		// Psych mods usually ship pack.json; prefer psych resolver when found
+		var psychMeta = Path.normalize('$path/pack.json');
+		if(FileSystem.exists(psychMeta))
+			return "psych";
+
 		if(normPath.indexOf("psychengine") != -1 || normPath.indexOf("psych") != -1)
 			return "psych";
 
@@ -375,6 +413,10 @@ class ModLoader
 			return "v-slice";
 
 		var normPath = Path.normalize(path).toLowerCase();
+		var psychMeta = Path.normalize('$path/pack.json');
+		if(Assets.exists(psychMeta))
+			return "psych";
+
 		if(normPath.indexOf("psychengine") != -1 || normPath.indexOf("psych") != -1)
 			return "psych";
 
@@ -778,4 +820,45 @@ class ModLoader
 			return true;
 		return false;
 	}
+
+	#if sys
+	static function loadPsychList():PsychList
+	{
+		var path = Path.normalize('$modRoot/modsList.txt');
+		if(!FileSystem.exists(path) || FileSystem.isDirectory(path))
+			return null;
+
+		var order:Array<String> = [];
+		var enabled:Array<String> = [];
+		try {
+			var lines = File.getContent(path).split("\n");
+			for(line in lines)
+			{
+				var clean = StringTools.trim(line);
+				if(clean == "" || clean.startsWith("#"))
+					continue;
+				var dat = clean.split("|");
+				var folder = normalizeId(dat[0]);
+				if(folder == null || folder == "") continue;
+				order.push(folder);
+				var flag = (dat.length > 1 ? dat[1].trim() : "1");
+				if(flag == "1")
+					enabled.push(folder);
+			}
+		} catch(e) {
+			Logs.print('Failed to read modsList.txt: $e', WARNING);
+		}
+		return {order: order, enabled: enabled};
+	}
+
+	static function applyPsychEnable(mods:Array<ModInfo>, enabled:Array<String>):Void
+	{
+		if(enabled == null || enabled.length == 0) return;
+		var enabledSet:Map<String, Bool> = new Map();
+		for(id in enabled)
+			enabledSet.set(id, true);
+		for(mod in mods)
+			mod.enabled = enabledSet.exists(mod.id);
+	}
+	#end
 }

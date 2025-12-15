@@ -74,6 +74,18 @@ class Paths
 		if(!renderedSounds.exists(cacheId))
 		{
 			var resolved = ModPaths.resolveWithExtensions(key, library, [".ogg", ".mp3"]);
+			if(resolved == null && key.indexOf("/audio/") != -1)
+			{
+				var altKey = key.split("/audio/").join("/");
+				var altId = cacheKey(altKey, library);
+				var altRes = ModPaths.resolveWithExtensions(altKey, library, [".ogg", ".mp3"]);
+				if(altRes != null || ModPaths.exists('$altKey.ogg', library))
+				{
+					key = altKey;
+					cacheId = altId;
+					resolved = altRes;
+				}
+			}
 			if(resolved == null && !ModPaths.exists('$key.ogg', library))
 			{
 				Logs.print('$key.ogg doesnt exist', WARNING);
@@ -207,17 +219,26 @@ class Paths
 
 	public static function songPath(song:String, key:String, diff:String, prefix:String = ''):String
 	{
-		var song:String = 'songs/$song/audio/$key';
+		var base:String = 'songs/$song';
 		var diffPref:String = '';
 		
 		// erect
 		if(['erect', 'nightmare'].contains(diff))
 			diffPref = '-erect';
 		
-		if(fileExists('$song$diffPref$prefix.ogg'))
-			return '$song$diffPref$prefix';
-		else
-			return '$song$diffPref';
+		var candidates:Array<String> = [
+			'$base/audio/$key$diffPref$prefix',
+			'$base/audio/$key$diffPref',
+			'$base/$key$diffPref$prefix',
+			'$base/$key$diffPref'
+		];
+		for(path in candidates)
+		{
+			if(fileExists('$path.ogg'))
+				return path;
+		}
+		// fallback legacy
+		return '$base/$key$diffPref';
 	}
 	public static function inst(song:String, diff:String = ''):Sound
 		return getSound(songPath(song, 'Inst', diff));
@@ -263,15 +284,33 @@ class Paths
 	
 	// sparrow (.xml) sheets
 	public static function getSparrowAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromSparrow(getGraphic(key, library), getContent('images/$key.xml', library));
+	{
+		var graphic = getGraphic(key, library);
+		var xmlPath = 'images/$key.xml';
+		if(!ModPaths.exists(xmlPath, library) && ModPaths.exists('images/$key.XML', library))
+			xmlPath = 'images/$key.XML';
+		return FlxAtlasFrames.fromSparrow(graphic, getContent(xmlPath, library));
+	}
 	
 	// packer (.txt) sheets
 	public static function getPackerAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromSpriteSheetPacker(getGraphic(key, library), getContent('images/$key.txt', library));
+	{
+		var graphic = getGraphic(key, library);
+		var txtPath = 'images/$key.txt';
+		if(!ModPaths.exists(txtPath, library) && ModPaths.exists('images/$key.TXT', library))
+			txtPath = 'images/$key.TXT';
+		return FlxAtlasFrames.fromSpriteSheetPacker(graphic, getContent(txtPath, library));
+	}
 
 	// aseprite (.json) sheets
 	public static function getAsepriteAtlas(key:String, ?library:String)
-		return FlxAtlasFrames.fromAseprite(getGraphic(key, library), getContent('images/$key.json', library));
+	{
+		var graphic = getGraphic(key, library);
+		var jsonPath = 'images/$key.json';
+		if(!ModPaths.exists(jsonPath, library) && ModPaths.exists('images/$key.JSON', library))
+			jsonPath = 'images/$key.JSON';
+		return FlxAtlasFrames.fromAseprite(graphic, getContent(jsonPath, library));
+	}
 
 	// sparrow (.xml) sheets but split into multiple graphics
 	public static function getMultiSparrowAtlas(baseSheet:String, otherSheets:Array<String>, ?library:String) {

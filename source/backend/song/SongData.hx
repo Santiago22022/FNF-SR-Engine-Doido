@@ -15,6 +15,7 @@ typedef SwagSong =
 
 	// Parity with other engines
 	var ?gfVersion:String;
+	var ?stage:String;
 }
 typedef SwagSection =
 {
@@ -278,6 +279,8 @@ class SongData
 
 		if(SONG.gfVersion == null)
 			SONG.gfVersion = "stage-set";
+		if(SONG.stage == null)
+			SONG.stage = SONG.song;
 		
 		return SONG;
 	}
