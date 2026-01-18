@@ -10,9 +10,8 @@ import backend.mobile.SafeArea;
 import backend.mobile.UIScaler;
 import backend.game.SaveData;
 import Main;
-import backend.system.ModLoader;
+import backend.ModIndex;
 import backend.system.ModTypes.ModInfo;
-import backend.system.ModConfig;
 import states.menu.OptionsState;
 
 class ModsMenuState extends MusicBeatState
@@ -38,7 +37,8 @@ class ModsMenuState extends MusicBeatState
 		var uiScale = UIScaler.scale();
 		cellHeight *= uiScale;
 		padding *= uiScale;
-		mods = ModLoader.getAllMods().copy();
+		ModIndex.refresh();
+		mods = ModIndex.getAllMods();
 		list = new FlxTypedGroup<FlxText>();
 
 		var bg = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, 0xFF0F0F1A);
@@ -80,9 +80,9 @@ class ModsMenuState extends MusicBeatState
 		for(i in 0...mods.length)
 		{
 			var mod = mods[i];
-			var enabledMark = mod.enabled ? "[ON] " : "[OFF]";
+			var enabledMark = mod.invalid ? "[INVALID] " : (mod.enabled ? "[ON] " : "[OFF] ");
 			var txt = new FlxText(SafeArea.safeRect.x + padding, startY + i * cellHeight + scrollOffset, SafeArea.safeRect.width - padding * 2, '${enabledMark}${mod.name} (${mod.id}) v${mod.version}', 22);
-			txt.color = FlxColor.WHITE;
+			txt.color = mod.invalid ? FlxColor.RED : FlxColor.WHITE;
 			txt.ID = i;
 			list.add(txt);
 		}
@@ -98,10 +98,15 @@ class ModsMenuState extends MusicBeatState
 		for(txt in list)
 		{
 			txt.alpha = (txt.ID == selected ? 1.0 : 0.6);
-			if(txt.ID == selected)
-				txt.color = mods[txt.ID].enabled ? FlxColor.LIME : FlxColor.GRAY;
+			var mod = mods[txt.ID];
+			if(mod.invalid)
+			{
+				txt.color = FlxColor.RED;
+			}
+			else if(txt.ID == selected)
+				txt.color = mod.enabled ? FlxColor.LIME : FlxColor.GRAY;
 			else
-				txt.color = mods[txt.ID].enabled ? FlxColor.WHITE : 0xFF666666;
+				txt.color = mod.enabled ? FlxColor.WHITE : 0xFF666666;
 			txt.y = header.y + header.height + padding + txt.ID * cellHeight + scrollOffset;
 		}
 		updateDesc();
@@ -116,12 +121,20 @@ class ModsMenuState extends MusicBeatState
 		}
 		var mod = mods[selected];
 		var authors = (mod.authors != null && mod.authors.length > 0) ? mod.authors.join(", ") : "Unknown author";
-		desc.text = '${mod.description}\n${authors} | target: ${mod.engineVersion == null ? "any" : mod.engineVersion}';
+		if(mod.invalid)
+			desc.text = '${mod.name} is invalid: ${mod.invalidReason == null ? "Unknown reason" : mod.invalidReason}';
+		else
+			desc.text = '${mod.description}\n${authors} | target: ${mod.engineVersion == null ? "any" : mod.engineVersion}';
 	}
 
 	function toggleSelected():Void
 	{
 		if(mods.length == 0) return;
+		if(mods[selected].invalid)
+		{
+			desc.text = '${mods[selected].name} cannot be enabled: ${mods[selected].invalidReason}';
+			return;
+		}
 		mods[selected].enabled = !mods[selected].enabled;
 		dirty = true;
 		rebuild();
@@ -145,17 +158,24 @@ class ModsMenuState extends MusicBeatState
 	{
 		if(dirty)
 		{
-			ModConfig.persistFrom(mods);
-			ModLoader.savePsychModsList(mods);
-			ModLoader.refresh();
+			var order:Array<String> = [];
+			var enabled:Array<String> = [];
+			for(mod in mods)
+			{
+				order.push(mod.id);
+				if(mod.enabled && !mod.invalid)
+					enabled.push(mod.id);
+			}
+			ModIndex.setOrderAndEnabled(order, enabled);
+			ModIndex.refresh();
 		}
 		Main.switchState(new OptionsState());
 	}
 
 	function refreshMods():Void
 	{
-		ModLoader.refresh();
-		mods = ModLoader.getAllMods().copy();
+		ModIndex.refresh();
+		mods = ModIndex.getAllMods();
 		selected = 0;
 		dirty = false;
 		rebuild();

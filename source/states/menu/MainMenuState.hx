@@ -116,6 +116,12 @@ class MainMenuState extends MusicBeatState
 		splashTxt.setBorderStyle(OUTLINE, 0xFF000000, 1.5);
 		splashTxt.y = FlxG.height - splashTxt.height - 4;
 		add(splashTxt);
+
+		var switchTxt = new FlxText(0, 0, 0, "Press TAB to switch to PSYCH ENGINE", 16);
+		switchTxt.setFormat(Main.gFont, 16, 0xFFFFFFFF, RIGHT);
+		switchTxt.setBorderStyle(OUTLINE, 0xFF000000, 1.5);
+		switchTxt.setPosition(FlxG.width - switchTxt.width - 4, FlxG.height - switchTxt.height - 4);
+		add(switchTxt);
 		
 		changeSelection();
 		bg.y = bgPosY;
@@ -130,6 +136,13 @@ class MainMenuState extends MusicBeatState
 	override function update(elapsed:Float)
 	{
 		super.update(elapsed);
+		
+		if(FlxG.keys.justPressed.TAB && !selectedSum)
+		{
+			FlxG.sound.play(Paths.sound('menu/confirmMenu')); // Usar sonido de Doido
+			Main.switchState(new psych_core.states.MainMenuState());
+			return;
+		}
 
 		#if debug
 		// Crash the game. For CrashHandler test purposes

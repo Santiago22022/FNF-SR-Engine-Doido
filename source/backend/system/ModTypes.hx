@@ -16,4 +16,8 @@ typedef ModInfo = {
 	var engineVersion:Null<String>;
 	var dependencies:Array<String>;
 	var conflicts:Array<String>;
+	var runsGlobally:Bool;
+	var restartRequired:Bool;
+	var invalid:Bool;
+	var invalidReason:Null<String>;
 }

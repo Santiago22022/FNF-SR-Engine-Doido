@@ -290,6 +290,11 @@ class PlayState extends MusicBeatState
 		FlxG.cameras.setDefaultDrawTarget(camGame, true);
 		
 		//camGame.zoom = 0.6;
+
+		// Initialize Psych Scripts (Cameras & Song Data available)
+		for(script in loadedScripts)
+			backend.psych.PsychBridge.initPsychScript(script, this);
+
 		callScript("create");
 		
 		stageBuild = new Stage();
@@ -300,14 +305,29 @@ class PlayState extends MusicBeatState
 		classicZoom = defaultCamZoom;
 		
 		camGame.zoom = defaultCamZoom;
-		switch(SONG.song)
+		
+		// PSYCH ENGINE MINI: Auto-Detection
+		var isPsychMode:Bool = false;
+		var currentMod = backend.system.ModLoader.getMod(backend.system.ModLoader.currentModDirectory);
+		
+		// 1. Check Mod Type (set by our new ModLoader)
+		if(currentMod != null && currentMod.type == "psych")
+			isPsychMode = true;
+
+		// 2. Legacy/Specific Song Overrides
+		switch(SONG.song) {
+			case "useless"|"beep-power": isPsychMode = true;
+		}
+
+		if(isPsychMode)
 		{
-			case "useless"|"beep-power":
-				hudBuild = new HudOG();
-				hudBuild.alpha = 0.0;
-			default:
-				hudBuild = new HudDoido();
-				hudBuild.alpha = 0.0;
+			hudBuild = new HudOG();
+			hudBuild.alpha = 0.0;
+		}
+		else
+		{
+			hudBuild = new HudDoido();
+			hudBuild.alpha = 0.0;
 		}
 		
 		/*
@@ -435,6 +455,11 @@ class PlayState extends MusicBeatState
 			vocalsOpp.loadEmbedded(Paths.vocals(daSong, songDiff, '-opp'), false, false);
 			addMusic(vocalsOpp);
 		}
+
+		// Re-inject Psych Scripts variables (Characters & Strumlines now available)
+		for(script in loadedScripts)
+			backend.psych.PsychBridge.initPsychScript(script, this);
+		callScript("onCreatePost");
 
 		Conductor.songPos = -Conductor.crochet * 5;
 		
@@ -1318,6 +1343,10 @@ class PlayState extends MusicBeatState
 	override function update(elapsed:Float)
 	{
 		if(psychLua != null) psychLua.onUpdate(elapsed);
+		
+		for(script in loadedScripts)
+			backend.psych.PsychBridge.updateScriptVars(script, this);
+			
 		callScript("update", [elapsed]);
 		super.update(elapsed);
 		var followLerp:Float = cameraSpeed * 5 * elapsed;
@@ -2342,6 +2371,47 @@ class PlayState extends MusicBeatState
 	function onEventHit(daEvent:EventNote) {
 		if(psychLua != null)
 			psychLua.onEvent(daEvent.eventName, daEvent.value1, daEvent.value2);
+			
+		// PSYCH ENGINE MINI: Dynamic Custom Event Loading
+		var eventNameClean = daEvent.eventName.trim();
+		var customEventPath = 'custom_events/' + eventNameClean;
+		// Check if we need to load a script for this event
+		var alreadyLoaded = false;
+		for(s in loadedScripts) if(s.name.contains(eventNameClean)) alreadyLoaded = true;
+		
+		if(!alreadyLoaded) {
+			var scriptPath:String = null;
+			var isLua:Bool = false;
+			
+			// Prioritize HScript for this engine, but check Lua too
+			if(backend.system.ModPaths.exists(customEventPath + '.lua')) {
+				scriptPath = customEventPath + '.lua';
+				isLua = true;
+			}
+			else if(backend.system.ModPaths.exists(customEventPath + '.hx'))
+				scriptPath = customEventPath + '.hx';
+			else if(backend.system.ModPaths.exists(customEventPath + '.hxc'))
+				scriptPath = customEventPath + '.hxc';
+				
+			if(scriptPath != null) {
+				if(isLua) {
+					if(psychLua != null) {
+						psychLua.addScript(scriptPath);
+						// Lua scripts are auto-added to the manager list, so next update/event calls will work
+						// We might want to init it or call onCreate manually if needed, but PsychLuaManager does it on new() typically. 
+						// For dynamic add, we might need a manual init call if not handled.
+						// Assuming addScript in our new Manager handles basic init.
+					}
+				} else {
+					var newScript = new crowplexus.iris.Iris(backend.system.ModPaths.resolveAssetPath(scriptPath), {name: eventNameClean, autoRun: true, autoPreset: true});
+					backend.psych.PsychBridge.initPsychScript(newScript, this);
+					loadedScripts.push(newScript);
+					newScript.call("onCreate", []);
+					newScript.call("onEvent", [daEvent.eventName, daEvent.value1, daEvent.value2]);
+				}
+			}
+		}
+
 		switch(daEvent.eventName)
 		{
 			case 'Play Animation':
@@ -2457,6 +2527,8 @@ class PlayState extends MusicBeatState
 					cam.angle = newAngle;
 		}
 
+		// Support both standard Psych 'onEvent' and internal 'onEventHit'
+		callScript("onEvent", [daEvent.eventName, daEvent.value1, daEvent.value2]);
 		callScript("onEventHit", [daEvent.eventName, daEvent.value1, daEvent.value2, daEvent.value3]);
 	}
 

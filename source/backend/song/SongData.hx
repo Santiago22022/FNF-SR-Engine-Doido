@@ -1,5 +1,13 @@
 package backend.song;
 
+import backend.system.ModLoader;
+import backend.system.ModPaths;
+import tjson.TJSON;
+#if sys
+import sys.FileSystem;
+import sys.io.File;
+#end
+
 using StringTools;
 
 typedef SwagSong =
@@ -89,6 +97,50 @@ class SongData
 			freeplayOnly: true,
 		},
 	];
+
+	public static function reloadWeeks():Void
+	{
+		var foundWeeks:Array<String> = ModPaths.listDir('weeks', null, [".json", ".JSON"], false);
+		for(file in foundWeeks)
+		{
+			var weekID = file.replace(".json", "").replace(".JSON", "");
+			// Check duplicates
+			var exists = false;
+			for(w in weeks) if(w.weekFile == weekID) exists = true;
+			if(exists) continue;
+
+			var raw = ModPaths.readText('weeks/$file');
+			if(raw == null) continue;
+
+			try {
+				var json:Dynamic = TJSON.parse(raw);
+				var week:FunkyWeek = {
+					songs: [],
+					weekFile: weekID,
+					weekName: Reflect.hasField(json, "storyName") ? Reflect.field(json, "storyName") : weekID,
+					chars: Reflect.hasField(json, "weekCharacters") ? cast Reflect.field(json, "weekCharacters") : ["", "bf", "gf"],
+					freeplayOnly: Reflect.hasField(json, "hideStoryMode") ? Reflect.field(json, "hideStoryMode") : false,
+					storyModeOnly: Reflect.hasField(json, "hideFreeplay") ? Reflect.field(json, "hideFreeplay") : false,
+					diffs: defaultDiffs // Psych often uses default diffs unless specified elsewhere
+				};
+
+				var songs:Array<Dynamic> = Reflect.field(json, "songs");
+				if(songs != null) {
+					for(s in songs) {
+						// Psych: [name, icon, [color]]
+						var songName = Std.string(s[0]);
+						var songIcon = Std.string(s[1]);
+						week.songs.push([songName, songIcon]);
+					}
+				}
+				
+				weeks.push(week);
+				backend.system.Logs.print('Loaded Psych Week: $weekID');
+			} catch(e) {
+				backend.system.Logs.print('Error loading week $file: $e', WARNING);
+			}
+		}
+	}
 
 	inline public static function getWeek(index:Int):FunkyWeek
 	{

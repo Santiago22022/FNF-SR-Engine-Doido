@@ -3,6 +3,7 @@ package backend.system;
 import haxe.io.Path;
 import StringTools;
 import openfl.utils.Assets;
+import backend.system.ModBackend;
 import backend.system.ModLoader;
 #if sys
 import sys.FileSystem;
@@ -16,7 +17,10 @@ import sys.io.File;
 class ModPaths
 {
 	public static function resolveAssetPath(key:String, ?library:String):Null<String>
+	{
+		// ModLoader now handles caching and logic entirely.
 		return ModLoader.resolveAssetPath(key, library);
+	}
 
 	public static function resolveWithExtensions(base:String, ?library:String, exts:Array<String>):Null<String>
 	{
@@ -42,37 +46,27 @@ class ModPaths
 	public static function exists(key:String, ?library:String):Bool
 	{
 		var resolved = resolveAssetPath(key, library);
-		#if sys
-		if(resolved != null && FileSystem.exists(resolved))
+		if(resolved != null && ModBackend.exists(resolved))
 			return true;
-		#end
-		if(resolved != null && Assets.exists(resolved))
-			return true;
-		return Assets.exists(resolveBasePath(key, library));
+		
+		var basePath = resolveBasePath(key, library);
+		return ModBackend.exists(basePath);
 	}
 
 	public static function readText(key:String, ?library:String):String
 	{
 		var resolved = resolveAssetPath(key, library);
-		#if sys
-		if(resolved != null && FileSystem.exists(resolved))
-			return File.getContent(resolved);
-		#end
-		if(resolved != null && Assets.exists(resolved))
-			return Assets.getText(resolved);
-		return Assets.getText(resolveBasePath(key, library));
+		if(resolved != null && ModBackend.exists(resolved))
+			return ModBackend.readText(resolved);
+		return ModBackend.readText(resolveBasePath(key, library));
 	}
 
 	public static function readBytes(key:String, ?library:String):haxe.io.Bytes
 	{
 		var resolved = resolveAssetPath(key, library);
-		#if sys
-		if(resolved != null && FileSystem.exists(resolved))
-			return File.getBytes(resolved);
-		#end
-		if(resolved != null && Assets.exists(resolved))
-			return Assets.getBytes(resolved);
-		return Assets.getBytes(resolveBasePath(key, library));
+		if(resolved != null && ModBackend.exists(resolved))
+			return ModBackend.readBytes(resolved);
+		return ModBackend.readBytes(resolveBasePath(key, library));
 	}
 
 	public static function listDir(dir:String, ?library:String, extensions:Array<String> = null, recursive:Bool = false):Array<String>
@@ -295,7 +289,8 @@ class ModPaths
 		if(library != null)
 			library = (library.startsWith("_") ? library.split("_")[1] : library);
 		#end
-
+		
+		// Use simple string concat to ensure forward slashes internally
 		if(library == null)
 			return 'assets/$key';
 		else

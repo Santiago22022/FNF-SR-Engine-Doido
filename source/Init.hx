@@ -5,6 +5,7 @@ import flixel.FlxG;
 import flixel.FlxSprite;
 import flixel.graphics.FlxGraphic;
 import states.*;
+import backend.system.ModLoader;
 #if html5
 import backend.system.Html5Optimizer;
 #end
@@ -15,11 +16,14 @@ class Init extends MusicBeatState
 	{
 		super.create();
 		SaveData.init();
+		ModLoader.refresh();
+		backend.song.SongData.reloadWeeks();
 		#if !html5
 		DiscordIO.check();
 		#end
 		
-		FlxG.fixedTimestep = false;
+		FlxG.fixedTimestep = false
+;
 		FlxG.mouse.useSystemCursor = true;
 		FlxG.mouse.visible = false;
 		FlxGraphic.defaultPersist = true;

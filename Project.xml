@@ -3,7 +3,7 @@
 
 	<!-- _________________________ Application Settings _________________________ -->
 
-	<app title="FNF: SR Engine" file="SREngine" packageName="com.santiago.srengine" package="com.santiago.srengine" main="Main" version="0.0.1" company="santiiaago" />
+	<app title="FNF: SR Engine" file="SREngine" packageName="com.santiago.srengine" package="com.santiago.srengine" main="Main" version="1.0.4" company="santiiaago" />
 	
 	<!--The flixel preloader is not accurate in Chrome. You can use it regularly if you embed the swf into a html file
 		or you can set the actual size of your file manually at "FlxPreloaderBase-onUpdate-bytesTotal"-->
@@ -35,7 +35,7 @@
 	<define name="ROUND_ICON" 			if="mac"/>
 	<define name="TOUCH_CONTROLS"		if="mobile"/>
 	<!--Uncomment-this-to-use-videos-in-your-mod!!-->
-	<define name="VIDEOS_ALLOWED" 		if="desktop || android || html5"/>
+	<!-- <define name="VIDEOS_ALLOWED" 		if="desktop || android || html5"/> -->
 	<define name="HXVLC_NO_SHARE_DIRECTORY" if="desktop || android" />
 
 	<!-- _____________________________ Path Settings ____________________________ -->
@@ -53,9 +53,9 @@
 
 	<!-- RENAME UNDERSCORE FOLDERS -->
 	<section if="RENAME_UNDERSCORE">
-		<assets path="assets/images/stages/_scripts" 	rename="assets/images/stages/scripts"/>
-		<assets path="assets/images/characters/_offsets" 	rename="assets/images/characters/offsets"/>
-		<assets path="assets/images/notes/_other" 			rename="assets/images/notes/other"/>
+		<assets path="assets/Doido/images/stages/_scripts" 	rename="assets/Doido/images/stages/scripts"/>
+		<assets path="assets/Doido/images/characters/_offsets" 	rename="assets/Doido/images/characters/offsets"/>
+		<assets path="assets/Doido/images/notes/_other" 			rename="assets/Doido/images/notes/other"/>
 	</section>
 
 	<!-- OpenAL config -->
@@ -73,15 +73,18 @@
 	<haxelib name="hscript-iris" />
 	<haxedef name="hscriptPos" />
 	<haxelib name="hxdiscord_rpc" if="DISCORD_RPC" />
-	<haxelib name="hxvlc" if="VIDEOS_ALLOWED" unless="html5" />
+	<!-- <haxelib name="hxvlc" if="VIDEOS_ALLOWED" unless="html5" /> -->
 	
 	<!-- ______ Custom Doido Libraries ______ -->
 	<haxelib name="flxanimate-doido"/>
+	<haxedef name="flxanimate" />
 	<haxelib name="tjson"/>
+	<haxelib name="linc_luajit" if="desktop"/>
 
 	<!-- ______________________________ Haxedefines _____________________________ -->
 
 	<haxedef name="FLX_NO_TOUCH" unless="TOUCH_CONTROLS" />
+	<haxedef name="LUA_ALLOWED" if="desktop" />
 
 	<haxedef name="FLX_NO_FOCUS_LOST_SCREEN" />
 	<haxedef name="FLX_NO_DEBUG" unless="debug" />

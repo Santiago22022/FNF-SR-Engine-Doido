@@ -12,6 +12,7 @@ import openfl.media.Sound;
 import states.PlayState;
 import backend.system.ModLoader;
 import backend.system.ModPaths;
+import backend.system.ModBackend;
 import tjson.TJSON;
 
 using StringTools;
@@ -59,14 +60,98 @@ class Paths
 			library = (library.startsWith("_") ? library.split("_")[1] : library);
 		#end
 
+		var currentClass:String = "";
+		// Safety check: FlxG.state can be null during boot/preloader
+		try {
+			if(FlxG.game != null && FlxG.state != null)
+			{
+				var cls = Type.getClass(FlxG.state);
+				if(cls != null)
+					currentClass = Type.getClassName(cls);
+			}
+		} catch(e:Dynamic) {}
+		
+		// Strict Separation Logic
+		// If FlxG.state is null (boot), assume Doido/Base context.
+		var isPsych:Bool = (currentClass != null && currentClass.startsWith("psych_core"));
+
 		if(library == null)
+		{
+			#if desktop if(isPsych)
+			{
+				// Psych Engine ONLY looks in Psych
+				if(sys.FileSystem.exists('assets/Psych/$key'))
+					return 'assets/Psych/$key';
+			}
+			else
+			{
+				// Doido Engine ONLY looks in Doido
+				if(sys.FileSystem.exists('assets/Doido/$key'))
+					return 'assets/Doido/$key';
+			} #end
+				
+			// Fallback to root assets (for libraries or shared stuff not moved, or boot files)
 			return 'assets/$key';
+		}
 		else
+		{
+			#if desktop if(isPsych)
+			{
+				if(sys.FileSystem.exists('assets/Psych/$library/$key'))
+					return 'assets/Psych/$library/$key';
+			}
+			else
+			{
+				if(sys.FileSystem.exists('assets/Doido/$library/$key'))
+					return 'assets/Doido/$library/$key';
+			}  #end
+				
 			return 'assets/$library/$key';
+		}
 	}
 	
 	public static function fileExists(filePath:String, ?library:String):Bool
-		return ModPaths.exists(filePath, library);
+	{
+		if(ModPaths.exists(filePath, library)) return true;
+		
+		var currentClass:String = "";
+		try {
+			if(FlxG.game != null && FlxG.state != null)
+			{
+				var cls = Type.getClass(FlxG.state);
+				if(cls != null)
+					currentClass = Type.getClassName(cls);
+			}
+		} catch(e:Dynamic) {}
+		
+		var isPsych:Bool = (currentClass != null && currentClass.startsWith("psych_core"));
+
+		// Manual check for Psych/Doido folders (Strict Separation)
+		if(library == null)
+		{
+			#if desktop if(isPsych)
+			{
+				if(sys.FileSystem.exists('assets/Psych/$filePath')) return true;
+			}
+			else
+			{
+				if(sys.FileSystem.exists('assets/Doido/$filePath')) return true;
+			} #end
+		}
+		else
+		{
+			#if desktop if(isPsych)
+			{
+				if(sys.FileSystem.exists('assets/Psych/$library/$filePath')) return true;
+			}
+			else
+			{
+				if(sys.FileSystem.exists('assets/Doido/$library/$filePath')) return true;
+			} #end
+		}
+		
+		return false;
+	}
 	
 	public static function getSound(key:String, ?library:String):Sound
 	{
@@ -79,14 +164,14 @@ class Paths
 				var altKey = key.split("/audio/").join("/");
 				var altId = cacheKey(altKey, library);
 				var altRes = ModPaths.resolveWithExtensions(altKey, library, [".ogg", ".mp3"]);
-				if(altRes != null || ModPaths.exists('$altKey.ogg', library))
+				if(altRes != null || fileExists('$altKey.ogg', library))
 				{
 					key = altKey;
 					cacheId = altId;
 					resolved = altRes;
 				}
 			}
-			if(resolved == null && !ModPaths.exists('$key.ogg', library))
+			if(resolved == null && !fileExists('$key.ogg', library))
 			{
 				Logs.print('$key.ogg doesnt exist', WARNING);
 				key = 'sounds/beep';
@@ -115,11 +200,19 @@ class Paths
 		if(key.endsWith('.png'))
 			key = key.substring(0, key.lastIndexOf('.png'));
 		var cacheId = cacheKey(key, library);
+		
+		// 1. Try to find the file (Mod -> Shared -> Base)
 		var path = ModPaths.resolveWithExtensions('images/$key', library, [".png"]);
+		
+		// 2. Fallback to base assets manually if resolve failed (legacy behavior, though ModPaths should cover it)
 		if(path == null)
 			path = getPath('images/$key.png', library);
 
-		if(fileExists('images/$key.png', library))
+		// 3. Optimization: If ModPaths returned a path, we trust it exists.
+		// Only check FileSystem if we fell back to the raw asset path.
+		var exists = (ModPaths.resolveAssetPath('images/$key.png', library) != null) || fileExists('images/$key.png', library);
+
+		if(exists)
 		{
 			if(!renderedGraphics.exists(cacheId))
 			{
@@ -134,6 +227,7 @@ class Paths
 				#end
 				
 				var newGraphic = FlxGraphic.fromBitmapData(bitmap, false, cacheId, false);
+				newGraphic.persist = true; // Optimization: Keep important assets alive longer
 				Logs.print('created new image $path');
 				
 				renderedGraphics.set(cacheId, newGraphic);
@@ -256,7 +350,14 @@ class Paths
 		return getContent('$key.txt', library).trim();
 
 	public static function getContent(filePath:String, ?library:String):String
-		return ModPaths.readText(filePath, library);
+	{
+		var modPath = ModPaths.resolveAssetPath(filePath, library);
+		if(modPath != null && ModBackend.exists(modPath))
+			return ModBackend.readText(modPath);
+
+		var finalPath = getPath(filePath, library);
+		return ModBackend.readText(finalPath);
+	}
 
 	public static function json(key:String, ?library:String):Dynamic
 		return TJSON.parse(getContent('$key.json', library).trim());
@@ -270,7 +371,16 @@ class Paths
 	public static function getScriptArray(?song:String):Array<String>
 	{
 		var arr:Array<String> = [];
-		for(folder in ["scripts", 'songs/$song/scripts'])
+		// Doido paths + Psych Engine paths
+		var foldersToCheck = [
+			"scripts", 
+			'songs/$song/scripts',
+			'data/$song',      // Psych: data/songName/script.hx
+			'data/scripts',    // Psych global scripts often here
+			'stages'           // Psych stage scripts
+		];
+
+		for(folder in foldersToCheck)
 		{
 			for(file in readDir(folder, [".hx", ".hxc"], false))
 				arr.push('$folder/$file');
