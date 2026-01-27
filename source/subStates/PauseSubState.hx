@@ -44,7 +44,7 @@ class PauseSubState extends MusicBeatSubState
 		super();
 		playstate = PlayState.instance;
 		playstate.setScript("this", this);
-		DiscordIO.changePresence("Paused - Restin' a bit");
+		DiscordIO.changePresence("Paused - cubi deja de hacer mamadas como instalarte el mfs para q te vaya a 1 fps (frames per sometimes)");
 		this.cameras = [FlxG.cameras.list[FlxG.cameras.list.length - 1]];
 		var banana = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, 0xFF000000);
 		add(banana);

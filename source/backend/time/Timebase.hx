@@ -42,14 +42,26 @@ class Timebase
 	{
 		if(!running || !advance)
 			return songPos;
+		
+		// 1. Advance time based on high-precision frame timer (smoothest movement)
+		songPos += elapsed * 1000 * songSpeed;
 
+		// 2. Resync against audio clock if available
 		if(followAudio && audio != null && audio.playing)
 		{
-			var target:Float = audio.time;
-			applyDrift(target);
+			var audioTime:Float = audio.time;
+			var drift:Float = Math.abs(songPos - audioTime);
+
+			// Continuous smooth correction
+			// Small drift? Very subtle nudge (keeps 144hz smoothness)
+			// Large drift? Stronger pull (fixes lag spikes)
+			var lerpFactor:Float = (drift > 30) ? 0.2 : 0.05;
+			
+			// If drift is massive (e.g. paused/seeked), snap instantly
+			if(drift > 800) lerpFactor = 1.0;
+
+			songPos = backend.utils.CoolUtil.fastLerp(songPos, audioTime, lerpFactor);
 		}
-		else
-			songPos += elapsed * 1000 * songSpeed;
 
 		return songPos;
 	}
@@ -60,17 +72,9 @@ class Timebase
 			return;
 
 		if(audio.playing)
-			applyDrift(audio.time);
+			songPos = audio.time; // Hard sync on demand
 	}
 
-	inline function applyDrift(target:Float):Void
-	{
-		var drift:Float = target - songPos;
-		if(Math.abs(drift) <= driftThresholdMs)
-		{
-			songPos += drift * driftLerp;
-			return;
-		}
-		songPos = target;
-	}
+	// Legacy helper removed as logic is now integrated in tick
+	function applyDrift(target:Float):Void {}
 }

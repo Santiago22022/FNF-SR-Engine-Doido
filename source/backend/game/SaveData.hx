@@ -161,6 +161,18 @@ class SaveData
 			"Input pipeline preset (Legacy/Buffered).",
 			["Legacy", "Buffered"]
 		],
+		"Hit Window Scale" => [
+			1.0,
+			SELECTOR,
+			"Multiplies the hit windows. Lower is harder, Higher is easier.",
+			[0.5, 1.5]
+		],
+		"Rating Offset" => [
+			0,
+			SELECTOR,
+			"Moves the judgement time (ms). Positive = Hit Later.",
+			[-30, 30]
+		],
 		"Legacy Mode" => [
 			true,
 			CHECKMARK,

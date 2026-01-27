@@ -64,6 +64,8 @@ class OptionsSubState extends MusicBeatSubState
             "Timing Preset",
             "Scroll Preset",
             "Input Preset",
+            "Hit Window Scale", // Customization
+            "Rating Offset",    // Customization
             "Legacy Mode",
 		],
 		"appearance" => [

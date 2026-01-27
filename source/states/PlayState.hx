@@ -227,6 +227,7 @@ class PlayState extends MusicBeatState
 	override public function create()
 	{
 		super.create();
+		
 		instance = this;
 		MobileTuner.apply();
 		strumlinesById.clear();
@@ -1576,6 +1577,12 @@ class PlayState extends MusicBeatState
 						for(note in strumline.noteGroup)
 						{
 							if(note == null) continue;
+							
+							// Optimization: Early Exit
+							// If the note is more than 2 seconds in the future, stop checking.
+							// Notes are generally sorted by time.
+							if (note.songTime > Conductor.songPos + 2000) break;
+
 							var noteDiff:Float = note.noteDiff();
 							
 							var minTiming:Float = Timings.minTiming;
@@ -2042,7 +2049,7 @@ class PlayState extends MusicBeatState
 		{
 			if(timebase != null)
 			{
-				timebase.syncWithAudio(inst);
+				// timebase.syncWithAudio(inst); // Disabled to allow smooth drift correction in tick()
 				Conductor.songPos = timebase.songPos;
 			}
 			else if(Math.abs(Conductor.songPos - inst.time) >= 20 && Conductor.songPos - inst.time <= 5000)

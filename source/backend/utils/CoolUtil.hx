@@ -89,6 +89,18 @@ class CoolUtil
 	public static function camZoomLerp(start:Float, target:Float = 1.0, speed:Int = 6):Float
 		return FlxMath.lerp(start, target, FlxG.elapsed * speed);
 	
+	/**
+	 * Faster linear interpolation without extra FlxMath overhead.
+	 */
+	inline public static function fastLerp(a:Float, b:Float, ratio:Float):Float
+		return a + ratio * (b - a);
+
+	/**
+	 * Fast bounding function to keep a value within min/max.
+	 */
+	inline public static function boundTo(value:Float, min:Float, max:Float):Float
+		return Math.max(min, Math.min(max, value));
+	
 	/*
 	* NOTE UTILS
 	*/

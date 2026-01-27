@@ -55,11 +55,11 @@ class Conductor
 		}
 	}
 
-	public static function calcBeat(bpm:Float):Float
-		return ((60 / bpm) * 1000);
+	public static inline function calcBeat(bpm:Float):Float
+		return (60000 / bpm); // 60 * 1000 = 60000, slightly faster than double div/mult
 
-	public static function calcStep(bpm:Float):Float
-		return calcBeat(bpm) / 4;
+	public static inline function calcStep(bpm:Float):Float
+		return calcBeat(bpm) * 0.25; // Mult is faster than div
 	
 	public static function calcStateStep():Int
 	{
@@ -78,5 +78,33 @@ class Conductor
 		if(localStepCrochet == 0) return lastChange.stepTime;
 
 		return lastChange.stepTime + Math.floor((songPos - lastChange.songTime) / localStepCrochet);
+	}
+
+	/**
+	 * Updates the song position smoothly. 
+	 * Fixes visual stutter by interpolating time instead of snapping to the audio thread every frame.
+	 */
+	public static function update(elapsed:Float):Void
+	{
+		if (flixel.FlxG.sound.music != null && flixel.FlxG.sound.music.playing)
+		{
+			// 1. Predict where we should be based on frame time
+			songPos += elapsed * 1000;
+
+			// 2. Check reality (Audio Thread)
+			var curTime:Float = flixel.FlxG.sound.music.time;
+
+			// 3. Resync logic
+			// Use smooth interpolation to correct drift instead of hard snapping
+			var drift = Math.abs(songPos - curTime);
+			if (drift > 20) {
+				// Stronger correction for larger drifts, but still interpolated
+				var lerpFactor = (drift > 100) ? 1.0 : 0.1;
+				songPos = (songPos * (1 - lerpFactor)) + (curTime * lerpFactor);
+			} else {
+				// Very subtle correction for micro-drifts
+				songPos = (songPos * 0.98) + (curTime * 0.02);
+			}
+		}
 	}
 }

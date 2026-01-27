@@ -18,6 +18,7 @@ class Init extends MusicBeatState
 		SaveData.init();
 		ModLoader.refresh();
 		backend.song.SongData.reloadWeeks();
+		
 		#if !html5
 		DiscordIO.check();
 		#end

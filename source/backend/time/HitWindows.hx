@@ -12,13 +12,27 @@ class HitWindows
 
 	public static function getPreset(name:String):HitWindowConfig
 	{
-		return switch(name)
+		var scale:Float = 1.0;
+		if (backend.game.SaveData.data.exists("Hit Window Scale"))
+			scale = backend.game.SaveData.data.get("Hit Window Scale");
+
+		var config = switch(name)
 		{
 			case PRESET_ARCADE: {hit: 120, early: 65, late: 65, spamGuard: true};
 			case PRESET_LENIENT: {hit: 150, early: 80, late: 80, spamGuard: false};
 			case PRESET_TIGHT: {hit: 90, early: 50, late: 50, spamGuard: true};
 			default: {hit: 150, early: 0, late: 0, spamGuard: false};
+		};
+
+		// Apply the user's customization multiplier
+		if (scale != 1.0)
+		{
+			config.hit = Math.round(config.hit * scale);
+			config.early = Math.round(config.early * scale);
+			config.late = Math.round(config.late * scale);
 		}
+
+		return config;
 	}
 }
 

@@ -2,7 +2,7 @@
 color 0a
 cd ../..
 echo BUILDING GAME
-haxelib run lime build android
+haxelib run lime test windows -debug
 echo.
 echo done.
 pause

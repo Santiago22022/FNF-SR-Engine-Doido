@@ -16,11 +16,28 @@ class InputPipeline
 
 	var buffers:Array<Array<InputEvent>> = [[], [], [], []];
 	var down:Array<Bool> = [false, false, false, false];
-	var maxKeepMs:Int = 1500;
+	var maxKeepMs:Int = 200; // Reduced to prevent ghost tapping on very late frames
+	var maxBufferLength:Int = 32; // Increased to handle dense jacks better
+	
+	// Simple pool
+	var eventPool:Array<InputEvent> = [];
 
 	public function new()
 	{
 		spamGuard = new SpamGuard();
+	}
+	
+	function getEvent(type:InputType, lane:Int, timeMs:Float):InputEvent
+	{
+		if(eventPool.length > 0)
+			return eventPool.pop().set(type, lane, timeMs);
+		return new InputEvent(type, lane, timeMs);
+	}
+	
+	function recycleEvent(evt:InputEvent)
+	{
+		if(evt != null && eventPool.length < 200) // Cap pool size just in case
+			eventPool.push(evt);
 	}
 
 	public function configure(useBuffer:Bool, earlyMs:Int, lateMs:Int, antiMash:Bool):Void
@@ -46,8 +63,8 @@ class InputPipeline
 			var newPress:Bool = justPressed[lane] && !down[lane];
 			if(newPress)
 			{
-				if(spamGuard.allowPress(lane, now))
-					buffers[lane].push({type: Press, lane: lane, timeMs: now});
+				if(spamGuard.allowPress(lane, now) && buffers[lane].length < maxBufferLength)
+					buffers[lane].push(getEvent(Press, lane, now));
 				down[lane] = pressed[lane];
 			}
 			else if(!pressed[lane] && down[lane])
@@ -86,7 +103,10 @@ class InputPipeline
 		if(lane < 0 || lane >= buffers.length) return null;
 		var buf = buffers[lane];
 		if(buf.length <= 0) return null;
-		return buf.shift();
+		
+		// Note: The caller is responsible for recycling this event after using it!
+		// Or we could return a struct copy and recycle here, but passing reference is faster.
+		return buf.shift(); 
 	}
 
 	inline public function deltaToNote(evt:InputEvent, noteTime:Float, inputOffset:Float):Float
@@ -97,6 +117,6 @@ class InputPipeline
 		var cutoff:Float = songPos - (maxKeepMs + earlyMs + lateMs);
 		for(buf in buffers)
 			while(buf.length > 0 && buf[0].timeMs < cutoff)
-				buf.shift();
+				recycleEvent(buf.shift());
 	}
 }

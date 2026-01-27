@@ -45,11 +45,12 @@
 	<set name="BUILD_DIR" value="export/release" unless="debug" />
 
 	<source path="source" />
-	<assets path="assets" /> <!-- if="VIDEOS_ALLOWED" /> -->
+	
+	<!-- Assets -->
+	<assets path="assets" exclude="**/readme.txt|**/README.txt|**/*.md" />
+	
 	<!--<assets path="assets" exclude="videos" unless="VIDEOS_ALLOWED" />-->
 	<assets path="art/mobile" rename="assets/images/mobile" if="TOUCH_CONTROLS" />
-	<!-- Avoid loading placeholder/readme text files in web preloader -->
-	<assets path="assets" exclude="**/readme.txt|**/README.txt" />
 
 	<!-- RENAME UNDERSCORE FOLDERS -->
 	<section if="RENAME_UNDERSCORE">
