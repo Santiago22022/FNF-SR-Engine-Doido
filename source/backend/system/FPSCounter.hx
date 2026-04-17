@@ -51,8 +51,6 @@ class FPSCounter extends Sprite
 			deltaTimeout += deltaTime;
 			return;
 		}
-
-		deltaTimeout = 0; // Reset timer so we don't update every frame after the first 50ms!
 		
 		var fps:Int = times.length;
 		if (fps > FlxG.updateFramerate)

@@ -5,12 +5,6 @@ import flixel.util.FlxSave;
 import openfl.system.Capabilities;
 import backend.song.Conductor;
 import backend.song.Highscore;
-import haxe.DynamicAccess;
-import backend.game.SettingsStore;
-import backend.game.SettingsModel;
-import backend.game.SettingsDefaults;
-import backend.game.SettingsModel;
-import backend.system.ModLoader;
 
 /*
 	Save data such as options and other things.
@@ -23,7 +17,7 @@ enum SettingType
 }
 class SaveData
 {
-	public static var data:DynamicAccess<Dynamic> = new DynamicAccess<Dynamic>();
+	public static var data:Map<String, Dynamic> = [];
 	public static var displaySettings:Map<String, Dynamic> = [
 		/*
 		*
@@ -73,12 +67,12 @@ class SaveData
 			"Whether to use Discord's game activity.",
 		],
 		"Shaders" => [
-			#if html5 false #else true #end,
+			true,
 			CHECKMARK,
 			"Fancy graphical effects. Disable this if you get GPU related crashes."
 		],
 		"Low Quality" => [
-			#if html5 true #else false #end,
+			false,
 			CHECKMARK,
 			"Disables extra assets that might make very low end computers lag."
 		],
@@ -121,63 +115,6 @@ class SaveData
 			"Only works when Hitsounds aren't off",
 			[0, 100]
 		],
-		"Input Buffer" => [
-			false,
-			CHECKMARK,
-			"Buffers inputs in milliseconds to reduce dropped hits. Default off for legacy feel."
-		],
-		"Input Early Buffer" => [
-			0,
-			SELECTOR,
-			"Extra early buffer (ms) for the input pipeline. Requires Input Buffer.",
-			[0, 120]
-		],
-		"Input Late Buffer" => [
-			0,
-			SELECTOR,
-			"Extra late buffer (ms) for the input pipeline. Requires Input Buffer.",
-			[0, 120]
-		],
-		"Anti Mash" => [
-			false,
-			CHECKMARK,
-			"Blocks OS key-repeat spam and ultra-fast mash per lane."
-		],
-		"Timing Preset" => [
-			"Legacy",
-			SELECTOR,
-			"Pick timing windows preset (Legacy/Arcade/Lenient/Tight).",
-			["Legacy", "Arcade", "Lenient", "Tight"]
-		],
-		"Scroll Preset" => [
-			"Legacy",
-			SELECTOR,
-			"Scroll behavior preset (Legacy or Stable).",
-			["Legacy", "Stable"]
-		],
-		"Input Preset" => [
-			"Legacy",
-			SELECTOR,
-			"Input pipeline preset (Legacy/Buffered).",
-			["Legacy", "Buffered"]
-		],
-		"Hit Window Scale" => [
-			1.0,
-			SELECTOR,
-			"Multiplies the hit windows. Lower is harder, Higher is easier.",
-			[0.5, 1.5]
-		],
-		"Rating Offset" => [
-			0,
-			SELECTOR,
-			"Moves the judgement time (ms). Positive = Hit Later.",
-			[-30, 30]
-		],
-		"Legacy Mode" => [
-			true,
-			CHECKMARK,
-			"Use classic feel. Disable to try the new timing/scroll pipeline."
-		],
 		/*
 		*
 		* APPEARANCE
@@ -195,7 +132,7 @@ class SaveData
 			"Whether a splash appears when you completely press a hold note.\nDisable if it distracts you. (Only works if Note Splashes is enabled)."
 		],
 		"Antialiasing" => [
-			#if html5 false #else true #end,
+			true,
 			CHECKMARK,
 			"Disabling it might increase the fps at the cost of smoother sprites"
 		],
@@ -254,37 +191,6 @@ class SaveData
 			"Decides the transparency of the playing Hitboxes.",
 			[0, 10]
 		],
-		"Hitbox Style" => [
-			"BASE",
-			SELECTOR,
-			"Choose the look of the gameplay hitbox buttons.",
-			["BASE", "DOIDO", "PIXEL"]
-		],
-		"useMobileUI" => [
-			#if mobile true #else false #end,
-			CHECKMARK,
-			"Enables mobile-friendly UI layout (safe areas/scale)."
-		],
-		"useVirtualControls" => [
-			#if mobile true #else false #end,
-			CHECKMARK,
-			"Show touch controls in gameplay."
-		],
-		"useSafeArea" => [
-			#if mobile true #else false #end,
-			CHECKMARK,
-			"Apply safe area padding for notches/gesture bars."
-		],
-		"useMobileQualityTier" => [
-			false,
-			CHECKMARK,
-			"Enable mobile-oriented quality reductions (splashes/shaders off)."
-		],
-		"useModMenuTouchList" => [
-			#if mobile true #else false #end,
-			CHECKMARK,
-			"Use touch scroll/large buttons in the Mods menu."
-		],
 		/*
 		*
 		* EXTRA STUFF
@@ -308,45 +214,67 @@ class SaveData
 	public static var saveControls:FlxSave = new FlxSave();
 	public static function init()
 	{
-		saveSettings.bind("settings"); // legacy binding for volume/muted and fallback
+		saveSettings.bind("settings"); // use these for settings
 		saveControls.bind("controls"); // controls :D
 		FlxG.save.bind("save-data"); // these are for other stuff, not recquiring to access the SaveData class
-		ModLoader.refresh(); // ensure mods are indexed before any Paths lookups
 		
 		load();
 		Controls.load();
 		Highscore.load();
 		subStates.editors.ChartAutoSaveSubState.load(); // uhhh
 		updateWindowSize();
-		update();
 	}
 	
 	public static function load()
 	{
-		var model = SettingsStore.load();
-
-		// migrate volume/muted legacy
-		if(model.settings != null)
-			data = model.settings;
 		if(saveSettings.data.volume != null)
-			data.set("volume", saveSettings.data.volume);
+			FlxG.sound.volume = saveSettings.data.volume;
 		if(saveSettings.data.muted != null)
-			data.set("muted", saveSettings.data.muted);
+			FlxG.sound.muted  = saveSettings.data.muted;
 
-		migrateLegacySettings();
-		syncSettingsWithDefaults();
-		addDynamicOptions();
-		sanitizeSettings();
+		if(saveSettings.data.settings == null)
+		{
+			for(key => values in displaySettings)
+				data[key] = values[0];
+			
+			saveSettings.data.settings = data;
+		}
+		else
+		{
+			var freeze:Null<Bool> = saveSettings.data.settings.get("Unfocus Freeze");
+			if(freeze != null) {
+				saveSettings.data.settings.set("Unfocus Pause", freeze);
+				saveSettings.data.settings.remove("Unfocus Freeze");
+			}
+		}
+		
+		if(Lambda.count(displaySettings) != Lambda.count(saveSettings.data.settings)) {
+			data = saveSettings.data.settings;
+			
+			for(key => values in displaySettings) {
+				if(data[key] == null)
+					data[key] = values[0];
+			}
+
+			for(key => values in data) {
+				if(displaySettings[key] == null)
+					data.remove(key);
+			}
+
+			saveSettings.data.settings = data;
+		}
+		
+		for(hitsound in Paths.readDir('sounds/hitsounds', [".ogg"], true))
+			if(!displaySettings.get("Hitsounds")[3].contains(hitsound))
+				displaySettings.get("Hitsounds")[3].insert(1, hitsound);
+		
+		data = saveSettings.data.settings;
 		save();
 	}
 	
 	public static function save()
 	{
-		var model:SettingsModel = {
-			schemaVersion: SettingsDefaults.CURRENT_SCHEMA,
-			settings: data
-		};
-		SettingsStore.saveModel(model);
+		saveSettings.data.settings = data;
 		saveSettings.flush();
 		update();
 	}
@@ -371,148 +299,15 @@ class SaveData
 	public static function updateWindowSize()
 	{
 		#if desktop
-		if(FlxG.stage == null || FlxG.stage.window == null) return;
 		if(FlxG.fullscreen) return;
-		var savedSize:String = Std.string(data.get("Window Size"));
-		var ws:Array<String> = savedSize.split("x");
-		if(ws.length < 2)
-			ws = Std.string(displaySettings.get("Window Size")[0]).split("x");
-        var windowSize:Array<Int> = [Std.parseInt(ws[0]),Std.parseInt(ws[1])];
-		var defaultSize:Array<String> = Std.string(displaySettings.get("Window Size")[0]).split("x");
-		for(i in 0...windowSize.length)
-		{
-			if(Math.isNaN(windowSize[i]) || windowSize[i] <= 0)
-				windowSize[i] = Std.parseInt(defaultSize[i]);
-		}
-        FlxG.stage.window.width = windowSize[0];
-        FlxG.stage.window.height= windowSize[1];
+		var ws:Array<String> = data.get("Window Size").split("x");
+        	var windowSize:Array<Int> = [Std.parseInt(ws[0]),Std.parseInt(ws[1])];
+        	FlxG.stage.window.width = windowSize[0];
+        	FlxG.stage.window.height= windowSize[1];
 		
 		// centering the window
 		FlxG.stage.window.x = Math.floor(Capabilities.screenResolutionX / 2 - windowSize[0] / 2);
 		FlxG.stage.window.y = Math.floor(Capabilities.screenResolutionY / 2 - (windowSize[1] + 16) / 2);
 		#end
-	}
-
-	static function migrateLegacySettings()
-	{
-		var freeze:Null<Bool> = data.get("Unfocus Freeze");
-		if(freeze != null) {
-			data.set("Unfocus Pause", freeze);
-			data.remove("Unfocus Freeze");
-		}
-	}
-
-	static function syncSettingsWithDefaults()
-	{
-		for(key => values in displaySettings)
-		{
-			if(!data.exists(key))
-				data.set(key, values[0]);
-		}
-
-		var keysToRemove:Array<String> = [];
-		for(key in data.keys())
-			if(!displaySettings.exists(key))
-				keysToRemove.push(key);
-		for(key in keysToRemove)
-			data.remove(key);
-
-		var model:SettingsModel = {
-			schemaVersion: SettingsDefaults.CURRENT_SCHEMA,
-			settings: data
-		};
-		SettingsStore.saveModel(model);
-	}
-
-	static function addDynamicOptions()
-	{
-		var hitsoundsSetting = displaySettings.get("Hitsounds");
-		if(hitsoundsSetting == null || hitsoundsSetting.length < 4)
-			return;
-
-		var list:Array<Dynamic> = hitsoundsSetting[3];
-		for(hitsound in Paths.readDir('sounds/hitsounds', [".ogg"], true))
-			if(!list.contains(hitsound))
-				list.insert(1, hitsound);
-	}
-
-	static function sanitizeSettings()
-	{
-		for(key => values in displaySettings)
-		{
-			var current:Dynamic = data.get(key);
-			var fixed:Dynamic = sanitizeValue(key, current, values);
-			if(current != fixed)
-				data.set(key, fixed);
-		}
-	}
-
-	static function sanitizeValue(key:String, current:Dynamic, values:Array<Dynamic>):Dynamic
-	{
-		var defaultValue:Dynamic = values[0];
-		var type:SettingType = values[1];
-		if(current == null)
-			return defaultValue;
-
-		switch(type)
-		{
-			case CHECKMARK:
-				return toBool(current, defaultValue == true);
-			case SELECTOR:
-				if(values.length < 4 || values[3] == null)
-					return current;
-
-				var options:Array<Dynamic> = values[3];
-				var rangeMin = options[0];
-				var rangeMax = options[1];
-				var hasRange:Bool = options.length == 2 && isNumber(rangeMin) && isNumber(rangeMax);
-
-				if(hasRange)
-					return clampInt(current, rangeMin, rangeMax);
-
-				var idx = options.indexOf(current);
-				if(idx == -1)
-				{
-					var matched:Dynamic = matchOption(options, current);
-					return matched == null ? defaultValue : matched;
-				}
-				return options[idx];
-		}
-
-		return defaultValue;
-	}
-
-	inline static function clampInt(value:Dynamic, min:Int, max:Int):Int
-	{
-		var parsed:Float = Std.parseFloat(Std.string(value));
-		if(Math.isNaN(parsed))
-			parsed = min;
-		var num:Int = Std.int(parsed);
-		if(num < min) num = min;
-		if(num > max) num = max;
-		return num;
-	}
-
-	static inline function isNumber(value:Dynamic):Bool
-		return Std.isOfType(value, Int) || Std.isOfType(value, Float);
-
-	static function toBool(value:Dynamic, fallback:Bool):Bool
-	{
-		if(Std.isOfType(value, Bool))
-			return value;
-
-		var lower = Std.string(value).toLowerCase();
-		if(lower == "true") return true;
-		if(lower == "false") return false;
-		return fallback;
-	}
-
-	static function matchOption(options:Array<Dynamic>, current:Dynamic):Dynamic
-	{
-		var curStr = Std.string(current).toLowerCase();
-		for(opt in options)
-			if(Std.string(opt).toLowerCase() == curStr)
-				return opt;
-		return null;
 	}
 }

@@ -1,13 +1,5 @@
 package backend.song;
 
-import backend.system.ModLoader;
-import backend.system.ModPaths;
-import tjson.TJSON;
-#if sys
-import sys.FileSystem;
-import sys.io.File;
-#end
-
 using StringTools;
 
 typedef SwagSong =
@@ -23,7 +15,6 @@ typedef SwagSong =
 
 	// Parity with other engines
 	var ?gfVersion:String;
-	var ?stage:String;
 }
 typedef SwagSection =
 {
@@ -98,50 +89,6 @@ class SongData
 		},
 	];
 
-	public static function reloadWeeks():Void
-	{
-		var foundWeeks:Array<String> = ModPaths.listDir('weeks', null, [".json", ".JSON"], false);
-		for(file in foundWeeks)
-		{
-			var weekID = file.replace(".json", "").replace(".JSON", "");
-			// Check duplicates
-			var exists = false;
-			for(w in weeks) if(w.weekFile == weekID) exists = true;
-			if(exists) continue;
-
-			var raw = ModPaths.readText('weeks/$file');
-			if(raw == null) continue;
-
-			try {
-				var json:Dynamic = TJSON.parse(raw);
-				var week:FunkyWeek = {
-					songs: [],
-					weekFile: weekID,
-					weekName: Reflect.hasField(json, "storyName") ? Reflect.field(json, "storyName") : weekID,
-					chars: Reflect.hasField(json, "weekCharacters") ? cast Reflect.field(json, "weekCharacters") : ["", "bf", "gf"],
-					freeplayOnly: Reflect.hasField(json, "hideStoryMode") ? Reflect.field(json, "hideStoryMode") : false,
-					storyModeOnly: Reflect.hasField(json, "hideFreeplay") ? Reflect.field(json, "hideFreeplay") : false,
-					diffs: defaultDiffs // Psych often uses default diffs unless specified elsewhere
-				};
-
-				var songs:Array<Dynamic> = Reflect.field(json, "songs");
-				if(songs != null) {
-					for(s in songs) {
-						// Psych: [name, icon, [color]]
-						var songName = Std.string(s[0]);
-						var songIcon = Std.string(s[1]);
-						week.songs.push([songName, songIcon]);
-					}
-				}
-				
-				weeks.push(week);
-				backend.system.Logs.print('Loaded Psych Week: $weekID');
-			} catch(e) {
-				backend.system.Logs.print('Error loading week $file: $e', WARNING);
-			}
-		}
-	}
-
 	inline public static function getWeek(index:Int):FunkyWeek
 	{
 		var week = weeks[index];
@@ -202,50 +149,11 @@ class SongData
 	inline public static function loadFromJson(jsonInput:String, ?diff:String = "normal"):SwagSong
 	{		
 		Logs.print('Chart Loaded: ' + '$jsonInput/$diff');
-		var targetDiff = diff;
-		var chartPath:Null<String> = null;
 
-		var candidates:Array<String> = [
-			'songs/$jsonInput/chart/$targetDiff.json',
-			'data/$jsonInput/${jsonInput}-$targetDiff.json',
-			'data/$jsonInput/$targetDiff.json'
-		];
-		for(path in candidates)
-			if(Paths.fileExists(path))
-			{
-				chartPath = path;
-				break;
-			}
-
-		if(chartPath == null && targetDiff != "normal")
-		{
-			targetDiff = "normal";
-			candidates = [
-				'songs/$jsonInput/chart/$targetDiff.json',
-				'data/$jsonInput/${jsonInput}-$targetDiff.json',
-				'data/$jsonInput/$targetDiff.json'
-			];
-			for(path in candidates)
-				if(Paths.fileExists(path))
-				{
-					chartPath = path;
-					break;
-				}
-		}
-
-		if(chartPath == null)
-		{
-			Logs.print('Chart not found for $jsonInput/$diff', WARNING);
-			return defaultSong();
-		}
+		if(!Paths.fileExists('songs/$jsonInput/chart/$diff.json'))
+			diff = "normal";
 		
-		var chartKey:String = chartPath;
-		if(chartKey.endsWith(".json"))
-			chartKey = chartKey.substr(0, chartKey.length - 5);
-
-		var rawChart:Dynamic = Paths.json(chartKey);
-		var rawSong:Dynamic = Reflect.hasField(rawChart, "song") ? Reflect.field(rawChart, "song") : rawChart;
-		var daSong:SwagSong = cast rawSong;
+		var daSong:SwagSong = cast Paths.json('songs/$jsonInput/chart/$diff').song;
 		
 		// formatting it
 		daSong = formatSong(daSong);
@@ -257,37 +165,19 @@ class SongData
 	{
 		var formatPath = 'events-$diff';
 
-		function firstExisting():Null<String> {
-			var candidates = [
-				'songs/$jsonInput/chart/$formatPath.json',
-				'data/$jsonInput/${jsonInput}-$formatPath.json',
-				'data/$jsonInput/$formatPath.json'
-			];
-			for(path in candidates)
-				if(Paths.fileExists(path))
-					return path;
-			return null;
+		function checkFile():Bool {
+			return Paths.fileExists('songs/$jsonInput/chart/$formatPath.json');
 		}
-
-		var path = firstExisting();
-		if(path == null)
-		{
+		if(!checkFile())
 			formatPath = 'events';
-			path = firstExisting();
-		}
-
-		if(path == null) {
+		if(!checkFile()) {
 			Logs.print('No Events Loaded');
 			return {songEvents: []};
 		}
 
-		Logs.print('Events Loaded: ' + path);
+		Logs.print('Events Loaded: ' + '$jsonInput/chart/$formatPath');
 
-		var eventKey = path;
-		if(eventKey.endsWith(".json"))
-			eventKey = eventKey.substr(0, eventKey.length - 5);
-
-		var daEvents:EventSong = cast Paths.json(eventKey);
+		var daEvents:EventSong = cast Paths.json('songs/$jsonInput/chart/$formatPath');
 		return daEvents;
 	}
 	
@@ -331,8 +221,6 @@ class SongData
 
 		if(SONG.gfVersion == null)
 			SONG.gfVersion = "stage-set";
-		if(SONG.stage == null)
-			SONG.stage = SONG.song;
 		
 		return SONG;
 	}

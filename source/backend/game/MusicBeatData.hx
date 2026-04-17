@@ -6,7 +6,6 @@ import flixel.FlxSubState;
 import flixel.addons.ui.FlxUIState;
 import flixel.group.FlxGroup;
 import backend.song.Conductor;
-import backend.game.IStepHit;
 import crowplexus.iris.Iris;
 
 #if TOUCH_CONTROLS
@@ -20,20 +19,6 @@ import flixel.FlxSubState;
 
 class MusicBeatState extends FlxUIState
 {
-	static inline var STEP_LOOP_CAP:Int = 2048;
-	private var stepHitables:Array<IStepHit> = [];
-
-	public function addStepHit(item:IStepHit)
-	{
-		if (!stepHitables.contains(item))
-			stepHitables.push(item);
-	}
-
-	public function removeStepHit(item:IStepHit)
-	{
-		stepHitables.remove(item);
-	}
-
 	#if TOUCH_CONTROLS
 	public var pad:DoidoPad;
 	#end
@@ -87,18 +72,8 @@ class MusicBeatState extends FlxUIState
 	{
 		_curStep = Conductor.calcStateStep();
 
-		var loops:Int = 0;
-		while(_curStep != curStep && loops < STEP_LOOP_CAP)
-		{
+		while(_curStep != curStep)
 			stepHit();
-			loops++;
-		}
-
-		if(loops >= STEP_LOOP_CAP && _curStep != curStep)
-		{
-			curStep = _curStep;
-			curBeat = Math.floor(curStep / 4);
-		}
 	}
 
 	private function stepHit()
@@ -113,10 +88,20 @@ class MusicBeatState extends FlxUIState
 		if(curStep % 4 == 0)
 			beatHit();
 
-		for (item in stepHitables)
+		function loopGroup(group:FlxGroup):Void
 		{
-			item.stepHit(curStep);
+			if(group == null) return;
+			for(item in group.members)
+			{
+				if(item == null) continue;
+				if(Std.isOfType(item, FlxGroup))
+					loopGroup(cast item);
+	
+				if(item._stepHit != null)
+					item._stepHit(curStep);
+			}
 		}
+		loopGroup(this);
 	}
 
 	private function beatHit()
@@ -129,11 +114,6 @@ class MusicBeatState extends FlxUIState
 	function createPad(mode:String = "blank", ?cameras:Array<FlxCamera>)
 	{
 		remove(pad);
-		if(!Controls.shouldUseTouch())
-		{
-			pad = null;
-			return;
-		}
 		pad = new DoidoPad(mode);
 
 		if(mode != "blank") {
@@ -145,44 +125,20 @@ class MusicBeatState extends FlxUIState
 	}
 
 	override function openSubState(SubState:FlxSubState) {
-		if(!(SubState is GameTransition) && pad != null)
+		if(!(SubState is GameTransition))
 			pad.togglePad(false);
 		super.openSubState(SubState);
 	}
 
 	override function closeSubState() {
-		if(pad != null)
-			pad.togglePad(true);
+		pad.togglePad(true);
 		super.closeSubState();
 	}
 	#end
-
-	override function destroy()
-	{
-		stepHitables = [];
-		#if TOUCH_CONTROLS
-		pad = null;
-		#end
-		super.destroy();
-	}
 }
 
 class MusicBeatSubState extends FlxSubState
 {
-	static inline var STEP_LOOP_CAP:Int = 2048;
-	private var stepHitables:Array<IStepHit> = [];
-
-	public function addStepHit(item:IStepHit)
-	{
-		if (!stepHitables.contains(item))
-			stepHitables.push(item);
-	}
-
-	public function removeStepHit(item:IStepHit)
-	{
-		stepHitables.remove(item);
-	}
-
 	var subParent:FlxState;
 
 	#if TOUCH_CONTROLS
@@ -228,18 +184,8 @@ class MusicBeatSubState extends FlxSubState
 	{
 		_curStep = Conductor.calcStateStep();
 
-		var loops:Int = 0;
-		while(_curStep != curStep && loops < STEP_LOOP_CAP)
-		{
+		while(_curStep != curStep)
 			stepHit();
-			loops++;
-		}
-
-		if(loops >= STEP_LOOP_CAP && _curStep != curStep)
-		{
-			curStep = _curStep;
-			curBeat = Math.floor(curStep / 4);
-		}
 	}
 
 	private function stepHit()
@@ -254,10 +200,20 @@ class MusicBeatSubState extends FlxSubState
 		if(curStep % 4 == 0)
 			beatHit();
 
-		for (item in stepHitables)
+		function loopGroup(group:FlxGroup):Void
 		{
-			item.stepHit(curStep);
+			if(group == null) return;
+			for(item in group.members)
+			{
+				if(item == null) continue;
+				if(Std.isOfType(item, FlxGroup))
+					loopGroup(cast item);
+	
+				if (item._stepHit != null)
+					item._stepHit(curStep);
+			}
 		}
+		loopGroup(this);
 	}
 
 	private function beatHit()
@@ -270,11 +226,6 @@ class MusicBeatSubState extends FlxSubState
 	function createPad(mode:String = "blank", ?cameras:Array<FlxCamera>)
 	{
 		remove(pad);
-		if(!Controls.shouldUseTouch())
-		{
-			pad = null;
-			return;
-		}
 		pad = new DoidoPad(mode);
 
 		if(mode != "blank") {
@@ -285,13 +236,5 @@ class MusicBeatSubState extends FlxSubState
 		}
 	}
 	#end
-
-	override function destroy()
-	{
-		stepHitables = [];
-		#if TOUCH_CONTROLS
-		pad = null;
-		#end
-		super.destroy();
-	}
 }
+

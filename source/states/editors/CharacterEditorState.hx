@@ -54,12 +54,11 @@ class CharacterEditorState extends MusicBeatState
 		var ghostAnims = ghost.animList;
 		for(i in 0...ghostAnims.length)
 		{
-			var animName = ghostAnims[i];
-			var animButton = new FlxButton(100, 30 + (20 * i), animName, function() {
+			var animButton = new FlxButton(100, 30 + (20 * i), ghostAnims[i], function() {
 				if(char.curChar == ghost.curChar)
 					ghost.animOffsets = char.animOffsets;
 
-				ghost.playAnim(animName, true);
+				ghost.playAnim(ghostAnims[i], true);
 				updateFrameSlider(1);
 			});
 			ghostAnimButtons.add(animButton);
@@ -161,18 +160,18 @@ class CharacterEditorState extends MusicBeatState
 
 		for(i in 0...2)
 		{
-			var sliderIndex = i;
 			var frameSlider = new DoidoSlider(
-				'${(sliderIndex == 0) ? 'Character' : 'Ghost'} Frame Picker',
-				6, animsHud.height - 120 + (60 * sliderIndex), -1, -1, 10, 0
+				'${(i == 0) ? 'Character' : 'Ghost'} Frame Picker',
+				6, animsHud.height - 120 + (60 * i), -1, -1, 10, 0
 			);
 			frameSlider.minLabel.text = "OFF";
 			frameSliders.push(frameSlider);
 			animTab.add(frameSlider);
-			frameSlider.ID = sliderIndex;
+			frameSlider.ID = i;
 			frameSlider.onChange = function()
 			{
-				var charFrame:Character = ((sliderIndex == 0) ? char : ghost);
+				//Logs.print(i + ' ' + frameSlider.value);
+				var charFrame:Character = ((i == 0) ? char : ghost);
 				var isOff:Bool = (frameSlider.value < 0.0);
 				frameSlider.valueLabel.alpha = (isOff ? 0.0 : 1.0);
 				if(isOff)
@@ -201,9 +200,8 @@ class CharacterEditorState extends MusicBeatState
 		var animList = char.animList;
 		for(i in 0...animList.length)
 		{
-			var animName = animList[i];
-			var animButton = new FlxButton(10, 30 + (20 * i), animName, function() {
-				char.playAnim(animName, true);
+			var animButton = new FlxButton(10, 30 + (20 * i), animList[i], function() {
+				char.playAnim(animList[i], true);
 				updateFrameSlider(0);
 				updateInputTxt();
 				updateTxt();
@@ -321,13 +319,12 @@ class CharacterEditorState extends MusicBeatState
 		var thoseButtons:Array<String> = ["animation", "global", "camera"];
 		for(i in 0...thoseButtons.length)
 		{
-			var buttonName = thoseButtons[i];
 			var butt = new FlxButton(
 			10  + (80 * (i % 2)),
 			115 + (20 * Math.floor(i / 2)),
-			buttonName,
+			thoseButtons[i],
 			function() {
-				selectedChange = buttonName.toLowerCase();
+				selectedChange = thoseButtons[i].toLowerCase();
 				paintEmButtons();
 				updateInputTxt();
 			});
@@ -469,17 +466,6 @@ class CharacterEditorState extends MusicBeatState
 			else
 				Main.switchState(new states.menu.MainMenuState());
 		}
-
-		if(FlxG.keys.justPressed.R && Controls.pressed(CONTROL))
-		{
-			camZoom = 1.0;
-			camMain.zoom = camZoom;
-			checkCamFollow.checked = true;
-			updateTxt();
-		}
-
-		if(FlxG.keys.justPressed.S && Controls.pressed(CONTROL))
-			saveOffsets();
 			
 		if(FlxG.mouse.wheel != 0)
 		{
@@ -586,7 +572,6 @@ class CharacterEditorState extends MusicBeatState
 				char.cameraOffset.y += y;
 		
 			case "animation":
-				ensureAnimOffset(char.curAnimName);
 				char.animOffsets.get(char.curAnimName)[0] += -x;
 				char.animOffsets.get(char.curAnimName)[1] += -y;
 				if(isSpace)
@@ -649,7 +634,6 @@ class CharacterEditorState extends MusicBeatState
 		
 			case "animation":
 				//Logs.print(char.curAnimName);
-				ensureAnimOffset(char.curAnimName);
 				var daAnim = char.animOffsets.get(char.curAnimName);
 				
 				changeInputX.text = Std.string(daAnim[0]);
@@ -674,13 +658,5 @@ class CharacterEditorState extends MusicBeatState
 			var _file = new FileReference();
 			_file.save(data.trim(), char.curChar + ".json");
 		}
-	}
-
-	function ensureAnimOffset(animName:String)
-	{
-		if(animName == null || animName.length == 0)
-			return;
-		if(!char.animOffsets.exists(animName))
-			char.addOffset(animName);
 	}
 }

@@ -5,7 +5,6 @@ import backend.song.SongData.SwagSection;
 import backend.song.SongData.SwagSong;
 import objects.note.EventNote;
 import objects.note.Note;
-import backend.utils.ObjectPool;
 
 using StringTools;
 
@@ -15,7 +14,7 @@ using StringTools;
 
 class ChartLoader
 {
-	public static function getChart(SONG:SwagSong, notePool:ObjectPool<Note>):Array<Note>
+	public static function getChart(SONG:SwagSong):Array<Note>
 	{
 		var unspawnNotes:Array<Note> = [];
 		var daSection:Int = 0;
@@ -47,7 +46,7 @@ class ChartLoader
 				if(songNotes[1] < 0) continue;
 				
 				// create the new note
-				var swagNote:Note = notePool.get();
+				var swagNote:Note = new Note();
 				swagNote.updateData(daStrumTime, daNoteData, daNoteType);
 				
 				unspawnNotes.push(swagNote);
@@ -79,7 +78,7 @@ class ChartLoader
 					{
 						var isHoldEnd = (j == holdLoop);
 						
-						var holdNote:Note = notePool.get();
+						var holdNote:Note = new Note();
 						holdNote.isHold = true;
 						holdNote.isHoldEnd = isHoldEnd;
 						holdNote.updateData(daStrumTime, daNoteData, daNoteType);
@@ -111,15 +110,9 @@ class ChartLoader
 
 	public static function getEvents(EVENTS:EventSong):Array<EventNote>
 	{
-		if(EVENTS == null || EVENTS.songEvents == null)
-			return [];
-
 		var unspawnEvents:Array<EventNote> = [];
 		for(eventList in EVENTS.songEvents)
 		{
-			if(eventList == null || eventList.length < 3 || eventList[2] == null)
-				continue;
-
 			for(i in 0...eventList[2].length)
 			{
 				var event = eventList[2][i];

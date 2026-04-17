@@ -18,34 +18,15 @@ class HealthIcon extends FlxSprite
 	public function setIcon(curIcon:String = "face", isPlayer:Bool = false):HealthIcon
 	{
 		this.curIcon = curIcon;
-		var path = 'icons/icon-$curIcon';
-		
-		// Hybrid Path Search
-		if(!Paths.fileExists('images/$path.png'))
+		if(!Paths.fileExists('images/icons/icon-${curIcon}.png'))
 		{
-			// 1. Try 'icons/char' (no prefix)
-			path = 'icons/$curIcon';
-			if(!Paths.fileExists('images/$path.png'))
-			{
-				// 2. Try 'icon-char' (root images/)
-				path = 'icon-$curIcon';
-				if(!Paths.fileExists('images/$path.png'))
-				{
-					// 3. Try 'char' (root images/)
-					path = curIcon;
-					if(!Paths.fileExists('images/$path.png'))
-					{
-						// Fail: Recursion or Default
-						if(curIcon.contains('-'))
-							return setIcon(CharacterUtil.formatChar(curIcon), isPlayer);
-						else
-							return setIcon("face", isPlayer);
-					}
-				}
-			}
+			if(curIcon.contains('-'))
+				return setIcon(CharacterUtil.formatChar(curIcon), isPlayer);
+			else
+				return setIcon("face", isPlayer);
 		}
 
-		var iconGraphic = Paths.image(path);
+		var iconGraphic = Paths.image("icons/icon-" + curIcon);
 
 		maxFrames = Math.floor(iconGraphic.width / 150);
 

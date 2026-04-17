@@ -1,11 +1,11 @@
-# FNF: SR ENGINE
+# FNF: DOIDO ENGINE
 <p align="center">
 <img src="https://www.newgrounds.com/dump/draw/a7487bb1dcc15a499c00a5c5d4be5eb3">
 </p>
 
-## SR Engine
+## Friday Night Funkin' Rewritten
 
-FNF: SR Engine is a fork of Doido Engine
+FNF: Doido Engine is a rewritte of FNF's code, while still being written in HaxeFlixel and aiming to be familiar to anyone knowledged in other FNF hardcoded engines.
 
 ## Features
 
@@ -23,14 +23,13 @@ FNF: SR Engine is a fork of Doido Engine
 - Easily customizable Options and Save data
 - In-game Crash Handler
 - Chart auto-saving
-- Loader mods psych and vanilla (testing)
 
 and more!
 
 ### Supports Windows, Linux and HTML5!
 
 ## How to use
-For information on how to Build the engine, as well as guides for how to use it, please check out the [FNF: SR Engine Wiki](https://doidoteam.github.io/wiki/)! 
+For information on how to Build the engine, as well as guides for how to use it, please check out the [FNF: Doido Engine Wiki](https://doidoteam.github.io/wiki/)!
 If you need help with anything, you can [join our Discord Server for support!](https://discord.gg/KVXf9Ygzu5)
 
 ### Libraries
@@ -38,7 +37,7 @@ To install the correct libraries, you can run your platform's respective script 
 
 ## Licenses
 
-The code in FNF': SR Engine and it's core original assets are licensed under the Apache 2.0 license: (https://www.apache.org/licenses/LICENSE-2.0).
+The code in FNF': Doido Engine and it's core original assets are licensed under the Apache 2.0 license: (https://www.apache.org/licenses/LICENSE-2.0).
 Some assets, including the "Friday Night Funkin'" name and logo, are property of The Funkin' Crew Inc. and all rights are reserved to it.
 Some other assets, such as test sprites and music, are used under permission from their creators, and so, have their rights reserved to whoever created them.
 

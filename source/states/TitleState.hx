@@ -40,9 +40,7 @@ class TitleState extends MusicBeatState
 			curWacky = allTexts[FlxG.random.int(0, allTexts.length - 1)].split('--');
 		}
 		
-		#if !html5
 		DiscordIO.changePresence("In Title Screen");
-		#end
 		FlxG.mouse.visible = false;
 		
 		persistentUpdate = true;
@@ -155,7 +153,7 @@ class TitleState extends MusicBeatState
 				case 14:
 					addText(['Funkin'], false);
 				case 15:
-					addText(['SR Engine'], false);
+					addText(['Doido Engine'], false);
 				case 16:
 					skipIntro();
 			}

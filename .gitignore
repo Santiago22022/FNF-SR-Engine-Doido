@@ -1,8 +1,6 @@
-.gemini/
 .git/
 .haxelib/
 export/
-FNF-PsychEngine-main/
 .vscode/launch.json
 RECOVER_*.fla
 .DS_Store

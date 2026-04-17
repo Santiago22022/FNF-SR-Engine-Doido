@@ -8,7 +8,6 @@ import flixel.group.FlxGroup;
 import flixel.math.FlxMath;
 import flixel.text.FlxText;
 import flixel.util.FlxColor;
-import flixel.ui.FlxBar;
 import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
 import objects.hud.HudClass.IconChange;
@@ -18,8 +17,6 @@ import flixel.util.FlxStringUtil;
 class HudOG extends HudClass
 {
 	public var infoTxt:FlxText;
-	public var timeBar:FlxBar;
-	public var timeTxt:FlxText;
 	
 	var botplaySin:Float = 0;
 	var botplayTxt:FlxText;
@@ -34,8 +31,6 @@ class HudOG extends HudClass
 	{
 		super("OG");
 		add(ratingGrp);
-		
-		// --- Health Bar ---
 		healthBar = new DoidoBar("hud/base/healthBar", "hud/base/healthBarBorder");
         healthBar.sideL.color = 0xFFFF0000;
         healthBar.sideR.color = 0xFF66FF33;
@@ -50,29 +45,11 @@ class HudOG extends HudClass
 		changeIcon(SONG.player2, ENEMY);
 		add(iconP2);
 		
-		// --- Info Text ---
-		infoTxt = new FlxText(0, 0, FlxG.width, "Score: 0 | Misses: 0 | Rating: ?");
-		infoTxt.setFormat(Main.gFont, 20, 0xFFFFFFFF, CENTER);
-		infoTxt.setBorderStyle(OUTLINE, FlxColor.BLACK, 1.25);
+		infoTxt = new FlxText(FlxG.width / 2 + 112, 0, 0, "hi there! i am using whatsapp");
+		infoTxt.setFormat(Main.gFont, 20, 0xFFFFFFFF, LEFT);
+		infoTxt.setBorderStyle(OUTLINE, FlxColor.BLACK, 1.5);
 		add(infoTxt);
 		
-		// --- Time Bar (Psych Style) ---
-		timeTxt = new FlxText(0, 19, 400, "SONG NAME", 32);
-		timeTxt.setFormat(Main.gFont, 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
-		timeTxt.scrollFactor.set();
-		timeTxt.alpha = 0;
-		timeTxt.borderSize = 2;
-
-		timeBar = new FlxBar(0, 0, LEFT_TO_RIGHT, 400, 19, this, 'songPercent', 0, 1);
-		timeBar.scrollFactor.set();
-		timeBar.createFilledBar(0xFF000000, 0xFFFFFFFF);
-		timeBar.numDivisions = 800; // Smoother
-		timeBar.alpha = 0;
-
-		add(timeBar);
-		add(timeTxt);
-		
-		// --- Extra Texts ---
 		badScoreTxt = new FlxText(0,0,0,"SCORE WILL NOT BE SAVED");
 		badScoreTxt.setFormat(Main.gFont, 26, 0xFFFF0000, CENTER);
 		badScoreTxt.setBorderStyle(OUTLINE, FlxColor.BLACK, 1.5);
@@ -80,27 +57,27 @@ class HudOG extends HudClass
 		badScoreTxt.visible = false;
 		add(badScoreTxt);
 		
-		botplayTxt = new FlxText(0,0,0,"BOTPLAY");
-		botplayTxt.setFormat(Main.gFont, 32, 0xFFFFFFFF, CENTER);
-		botplayTxt.setBorderStyle(OUTLINE, FlxColor.BLACK, 1.25);
+		botplayTxt = new FlxText(0,0,0,"[BOTPLAY]");
+		botplayTxt.setFormat(Main.gFont, 40, 0xFFFFFFFF, CENTER);
+		botplayTxt.setBorderStyle(OUTLINE, FlxColor.BLACK, 1.5);
 		botplayTxt.screenCenter();
 		botplayTxt.visible = false;
 		add(botplayTxt);
 
 		updatePositions();
-		for(i in [infoTxt, healthBar, iconP1, iconP2, timeBar, timeTxt])
+		for(i in [
+			infoTxt,
+			healthBar,
+			iconP1,
+			iconP2,
+		])
 			alphaList.push(i);
 	}
-
-	public var songPercent:Float = 0;
 
 	override function updateInfoTxt()
 	{
 		super.updateInfoTxt();
-		// Psych Style Formatting
-		infoTxt.text = 'Score: ' + FlxStringUtil.formatMoney(Timings.score, false, true) + 
-					   ' | Misses: ' + Timings.misses + 
-					   ' | Rating: ' + (Timings.getRank() != "N/A" ? Timings.getRank() + ' (' + Timings.accuracy + '%)' : '?');
+		infoTxt.text = 'Score: ' + FlxStringUtil.formatMoney(Timings.score, false, true);
 	}
 
 	public function updateIconPos()
@@ -110,32 +87,23 @@ class HudOG extends HudClass
 			healthBar.y - (healthBar.border.height / 2)
 		);
 
-		// Psych logic: Icons move dynamically based on health
-		var iconOffset:Int = 26;
-		iconP1.x = healthBarPos.x + (150 * iconP1.scale.x - 150) / 2 - iconOffset;
-		iconP2.x = healthBarPos.x - (150 * iconP2.scale.x) / 2 - iconOffset * 2;
-		
-		iconP1.y = healthBar.y - (iconP1.height / 2);
-		iconP2.y = healthBar.y - (iconP2.height / 2);
+		iconP1.y = healthBarPos.y - (iconP1.height / 2);
+		iconP2.y = healthBarPos.y - (iconP2.height / 2);
+
+		iconP1.x = healthBarPos.x - 20;
+		iconP2.x = healthBarPos.x - iconP2.width + 32;
 	}
 
 	override function updatePositions()
 	{
 		super.updatePositions();
 		healthBar.x = (FlxG.width / 2) - (healthBar.border.width / 2);
-		healthBar.y = (downscroll ? 0.11 * FlxG.height : 0.89 * FlxG.height);
+		healthBar.y = (downscroll ? 70 : FlxG.height - healthBar.border.height - 50);
 		
-		infoTxt.y = healthBar.y + (downscroll ? -30 : 30);
+		updateInfoTxt();
+		infoTxt.y = healthBar.y + healthBar.border.height + 4;
 		
-		timeBar.x = FlxG.width / 2 - timeBar.width / 2;
-		timeBar.y = (downscroll ? FlxG.height - 31 : 19);
-		
-		timeTxt.text = PlayState.SONG.song.toUpperCase();
-		timeTxt.size = 24; // Smaller for HUD
-		timeTxt.y = timeBar.y + (timeBar.height / 2) - (timeTxt.height / 2);
-		timeTxt.x = timeBar.x + (timeBar.width / 2) - (timeTxt.width / 2);
-
-		badScoreTxt.y = healthBar.y + (downscroll ? 100 : -100);
+		badScoreTxt.y = healthBar.y - badScoreTxt.height - 4;
 	}
 
 	override function update(elapsed:Float)
@@ -143,15 +111,8 @@ class HudOG extends HudClass
 		super.update(elapsed);
 		healthBar.percent = (health * 50);
 		
-		// Update Time Bar
-		var curTime:Float = Conductor.songPos - backend.game.SaveData.data.get("Note Offset");
-		if(curTime < 0) curTime = 0;
-		songPercent = (curTime / PlayState.songLength);
-		if (songPercent > 1) songPercent = 1;
-		
 		botplayTxt.visible = PlayState.botplay;
 		badScoreTxt.visible = !PlayState.validScore;
-		
 		if(botplayTxt.visible)
 		{
 			botplaySin += elapsed * Math.PI;
@@ -160,10 +121,10 @@ class HudOG extends HudClass
 
 		for(icon in [iconP1, iconP2])
 		{
-			// Psych Engine Icon Bumping
-			var mult:Float = FlxMath.lerp(1, icon.scale.x, Math.exp(-elapsed * 9));
-			icon.scale.set(mult, mult);
-			
+			icon.scale.set(
+				FlxMath.lerp(icon.scale.x, 1, FlxG.elapsed * 6),
+				FlxMath.lerp(icon.scale.y, 1, FlxG.elapsed * 6)
+			);
 			if(!icon.isPlayer)
 				icon.setAnim(2 - health);
 			else
@@ -176,19 +137,11 @@ class HudOG extends HudClass
 
 	override function addRating(rating:Rating)
 	{
-		// Psych Engine Rating Placement (Centered)
 		super.addRating(rating);
-		
-		// Rating is a FlxGroup, use setPos instead of direct x/y assignment
-		var centerX = FlxG.width / 2;
-		var centerY = FlxG.height / 2;
-		
-		rating.setPos(centerX - 40, centerY - 60); // Offset to center
-		
+		rating.numberOffset.x += 64;
 		if(rating.assetModifier == "pixel")
-		{
-			rating.setPos(centerX - 20, centerY - 40);
-		}
+			rating.numberOffset.x /= 5;
+		rating.setPos(FlxG.width / 2 + 130, FlxG.height / 2 - 80);
 		rating.playRating();
 	}
 
@@ -203,14 +156,14 @@ class HudOG extends HudClass
 	override function beatHit(curBeat:Int = 0)
 	{
 		super.beatHit(curBeat);
-		if(curBeat % 2 == 0) // Changed to every 2 beats for simpler bop, can be 1
+		if(curBeat % 2 == 0)
 		{
 			for(icon in [iconP1, iconP2])
 			{
-				icon.scale.set(1.2, 1.2);
+				icon.scale.set(1.3,1.3);
 				icon.updateHitbox();
+				updateIconPos();
 			}
-			updateIconPos();
 		}
 	}
 }

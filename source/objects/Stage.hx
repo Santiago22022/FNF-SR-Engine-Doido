@@ -5,16 +5,8 @@ import flixel.FlxSprite;
 import flixel.group.FlxGroup;
 import flixel.math.FlxPoint;
 import states.PlayState;
-import objects.BackgroundGirls;
-import backend.game.IStepHit;
-import backend.system.ModPaths;
-import tjson.TJSON;
-#if sys
-import sys.io.File;
-import sys.FileSystem;
-#end
 
-class Stage extends FlxGroup implements IStepHit
+class Stage extends FlxGroup
 {
 	public static var instance:Stage;
 
@@ -50,23 +42,17 @@ class Stage extends FlxGroup implements IStepHit
 	{
 		var stageList:Array<String> = [];
 		
-		var normalized = song == null ? "" : song.toLowerCase().trim();
-		if(normalized != "" && normalized != "test")
-			stageList = [normalized];
-		else
+		stageList = switch(song)
 		{
-			stageList = switch(song)
-			{
-				default: ["stage"];
-				
-				case "collision": ["mugen"];
-				
-				case "senpai"|"roses": 	["school"];
-				case "thorns": 			["school-evil"];
-				
-				//case "template": ["preload1", "preload2", "starting-stage"];
-			};
-		}
+			default: ["stage"];
+			
+			case "collision": ["mugen"];
+			
+			case "senpai"|"roses": 	["school"];
+			case "thorns": 			["school-evil"];
+			
+			//case "template": ["preload1", "preload2", "starting-stage"];
+		};
 
 		//this stops you from fucking stuff up by changing this mid song
 		lowQuality = SaveData.data.get("Low Quality");
@@ -143,63 +129,6 @@ class Stage extends FlxGroup implements IStepHit
 	public function loadCode(curStage:String = "")
 	{
 		gfVersion = getGfVersion(curStage);
-		if(loadStageFromJson(curStage))
-		{
-			this.curStage = curStage;
-			return;
-		}
-		// Generic loader for mod stages (Psych-style): look for stageback/front/curtains under images/stages/<curStage>
-		if(curStage != null && curStage.trim() != "" && scripted.contains(curStage))
-			return;
-
-		if(curStage != null && curStage.trim() != "" && !["stage","school","school-evil"].contains(curStage.toLowerCase()))
-		{
-			var base = 'stages/$curStage';
-			var backPath = 'stages/$curStage/stageback';
-			var frontPath = 'stages/$curStage/stagefront';
-			var curtainsPath = 'stages/$curStage/stagecurtains';
-			var anyFound:Bool = false;
-
-			if(Paths.fileExists('$backPath.png'))
-			{
-				var bg = new FlxSprite(-600, -600).loadGraphic(Paths.image(backPath));
-				bg.scrollFactor.set(0.6,0.6);
-				add(bg);
-				anyFound = true;
-			}
-			if(Paths.fileExists('$frontPath.png'))
-			{
-				var front = new FlxSprite(-580, 440).loadGraphic(Paths.image(frontPath));
-				add(front);
-				anyFound = true;
-			}
-			if(!lowQuality && Paths.fileExists('$curtainsPath.png'))
-			{
-				var curtains = new FlxSprite(-600, -400).loadGraphic(Paths.image(curtainsPath));
-				curtains.scrollFactor.set(1.4,1.4);
-				foreground.add(curtains);
-				anyFound = true;
-			}
-			if(!anyFound)
-			{
-				var files = ModPaths.listDir('images/$base', null, [".png", ".PNG"], false);
-				for(file in files)
-				{
-					var name = file;
-					if(name.lastIndexOf(".") != -1)
-						name = name.substr(0, name.lastIndexOf("."));
-					var spr = new FlxSprite().loadGraphic(Paths.image('$base/$name'));
-					add(spr);
-					anyFound = true;
-				}
-			}
-			if(anyFound)
-			{
-				this.curStage = curStage;
-				return;
-			}
-		}
-
 		switch(curStage)
 		{
 			default:
@@ -257,8 +186,27 @@ class Stage extends FlxGroup implements IStepHit
 					treeLeaves.scrollFactor.set(0.85, 0.85);
 					add(treeLeaves);
 					
-					var bgGirls = new BackgroundGirls(-100, 175);
-					if (PlayState.instance != null) PlayState.instance.addStepHit(bgGirls);
+					var bgGirls = new FlxSprite(-100, 175); // 190
+					bgGirls.frames = Paths.getSparrowAtlas('stages/school/bgFreaks');
+					bgGirls.scrollFactor.set(0.9, 0.9);
+					
+					var girlAnim:String = "girls group";
+					if(PlayState.SONG.song == 'roses')
+						girlAnim = 'fangirls dissuaded';
+					
+					bgGirls.animation.addByIndices('danceLeft',  'BG $girlAnim', CoolUtil.intArray(14),		"", 24, false);
+					bgGirls.animation.addByIndices('danceRight', 'BG $girlAnim', CoolUtil.intArray(30, 15), "", 24, false);
+					bgGirls.animation.play('danceLeft');
+					bgGirls._stepHit = function(curStep:Int)
+					{
+						if(curStep % 4 == 0)
+						{
+							if(bgGirls.animation.curAnim.name == 'danceLeft')
+								bgGirls.animation.play('danceRight', true);
+							else
+								bgGirls.animation.play('danceLeft', true);
+						}
+					}
 					add(bgGirls);
 				}
 				
@@ -294,11 +242,6 @@ class Stage extends FlxGroup implements IStepHit
 		}
 	}
 
-	function loadStageFromJson(stage:String):Bool
-	{
-		return backend.psych.PsychBridge.loadStage(this, stage);
-	}
-
 	public function getGfVersion(curStage:String)
 	{
 		if(gfSong != "stage-set")
@@ -318,7 +261,7 @@ class Stage extends FlxGroup implements IStepHit
 		callScript("update", [elapsed]);
 	}
 	
-	public function stepHit(curStep:Int)
+	public function stepHit(curStep:Int = -1)
 	{
 		// beat hit
 		// if(curStep % 4 == 0)

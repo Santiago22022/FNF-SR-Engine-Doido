@@ -14,7 +14,6 @@ import objects.menu.Alphabet;
 import objects.menu.options.*;
 import states.PlayState;
 import states.menu.MainMenuState;
-import states.menu.ModsMenuState;
 
 class OptionsSubState extends MusicBeatSubState
 {
@@ -23,7 +22,6 @@ class OptionsSubState extends MusicBeatSubState
         "gameplay",
         "appearance",
         #if TOUCH_CONTROLS "mobile", #end
-        "mods",
         "adjust offsets",
         "controls",
     ];
@@ -57,16 +55,6 @@ class OptionsSubState extends MusicBeatSubState
             #end
             "Hitsounds",
             "Hitsound Volume",
-            "Input Buffer",
-            "Input Early Buffer",
-            "Input Late Buffer",
-            "Anti Mash",
-            "Timing Preset",
-            "Scroll Preset",
-            "Input Preset",
-            "Hit Window Scale", // Customization
-            "Rating Offset",    // Customization
-            "Legacy Mode",
 		],
 		"appearance" => [
             "Note Splashes",
@@ -86,12 +74,6 @@ class OptionsSubState extends MusicBeatSubState
             "Invert Swipes",
             "Button Opacity",
             "Hitbox Opacity",
-            "Hitbox Style",
-            "useMobileUI",
-            "useVirtualControls",
-            "useSafeArea",
-            "useMobileQualityTier",
-            "useModMenuTouchList",
         ]
         #end
 	];
@@ -189,7 +171,7 @@ class OptionsSubState extends MusicBeatSubState
         spawnItems('main');
 
         #if TOUCH_CONTROLS
-		createPad("menu", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
+		createPad("back", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
 		#end
     }
 
@@ -252,9 +234,6 @@ class OptionsSubState extends MusicBeatSubState
                         Logs.print('FUCK YOU!!', WARNING);*/
                         persistentDraw = false;
                         openSubState(new ControlsSubState());
-                    case "mods":
-                        FlxG.sound.play(Paths.sound('menu/scrollMenu'));
-                        Main.switchState(new ModsMenuState());
                     case "adjust offsets":
                         persistentDraw = false;
                         openSubState(new OffsetsSubState());
@@ -302,7 +281,7 @@ class OptionsSubState extends MusicBeatSubState
                         if(selec.label == "Window Size")
                             SaveData.updateWindowSize();
                         #if TOUCH_CONTROLS
-                        else if(selec.label == "Button Opacity" && pad != null)
+                        else if(selec.label == "Button Opacity")
                             pad.togglePad(true);
                         #end
                         // only happens when youre not holding the selector

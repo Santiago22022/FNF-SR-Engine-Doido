@@ -111,7 +111,7 @@ class OffsetsSubState extends MusicBeatSubState
         add(grpSelectors);
 
         #if TOUCH_CONTROLS
-		createPad("menu", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
+		createPad("back", [FlxG.cameras.list[FlxG.cameras.list.length - 1]]);
 		#end
 
         changeOption();

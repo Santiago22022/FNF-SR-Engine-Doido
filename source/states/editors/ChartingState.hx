@@ -152,16 +152,10 @@ class ChartingState extends MusicBeatState
 		FlxG.cameras.reset(camGame);
 		FlxG.cameras.add(camHUD, false);
 
-		var hitPath:String = SaveData.data.exists("Hitsounds") ? SaveData.data.get("Hitsounds") : "OFF";
+		var hitPath:String = SaveData.data.get("Hitsounds");
 		if(hitPath == "OFF")
 			hitPath = "OSU";
-		var hsKey = 'hitsounds/$hitPath';
-		if(!Paths.fileExists('sounds/$hsKey.ogg'))
-		{
-			Logs.print('Hitsound $hsKey not found, using default OSU', WARNING);
-			hsKey = 'hitsounds/OSU';
-		}
-		hitsound = new FlxSound().loadEmbedded(Paths.sound(hsKey), false, false);
+		hitsound = new FlxSound().loadEmbedded(Paths.sound('hitsounds/$hitPath'), false, false);
 		hitsound.play();
 		hitsound.stop();
 		FlxG.sound.list.add(hitsound);
@@ -1259,11 +1253,9 @@ class ChartingState extends MusicBeatState
 	function loadAudio()
 	{
 		songList = [];
-		songLength = Math.POSITIVE_INFINITY;
+		songLength = 0;
 		function addMusic(music:FlxSound):Void
 		{
-			if(music == null)
-				return;
 			FlxG.sound.list.add(music);
 
 			if(music.length > 0)
@@ -1281,34 +1273,24 @@ class ChartingState extends MusicBeatState
 		var daSong:String = SONG.song.toLowerCase();
 
 		var inst = new FlxSound();
-		inst.loadEmbedded(pickSongSound(Paths.songPath(daSong, 'Inst', songDiff), "Inst"), false, false);
+		inst.loadEmbedded(Paths.inst(daSong, songDiff), false, false);
+		songLength = inst.length;
 		addMusic(inst);
 
 		if(SONG.needsVoices)
 		{
 			var vocals = new FlxSound();
-			vocals.loadEmbedded(pickSongSound(Paths.songPath(daSong, 'Voices', songDiff, '-player'), "Voices-player"), false, false);
+			vocals.loadEmbedded(Paths.vocals(daSong, songDiff, '-player'), false, false);
 			addMusic(vocals);
 
 			// opponent vocals
 			if(Paths.songPath(daSong, 'Voices', songDiff, '-opp').endsWith('-opp'))
 			{
 				var vocalsOpp = new FlxSound();
-				vocalsOpp.loadEmbedded(pickSongSound(Paths.songPath(daSong, 'Voices', songDiff, '-opp'), "Voices-opp"), false, false);
+				vocalsOpp.loadEmbedded(Paths.vocals(daSong, songDiff, '-opp'), false, false);
 				addMusic(vocalsOpp);
 			}
 		}
-
-		if(!Math.isFinite(songLength))
-			songLength = 0;
-	}
-
-	static inline function pickSongSound(path:String, label:String):Sound
-	{
-		var exists = Paths.fileExists('$path.ogg');
-		if(!exists)
-			Logs.print('Missing audio for $label at $path.ogg, falling back to beep', WARNING);
-		return Paths.getSound(exists ? path : 'sounds/beep');
 	}
 
 	var conductorOffset:Float = 0;
@@ -1680,7 +1662,7 @@ class ChartingState extends MusicBeatState
 				Main.switchState(new LoadingState());
 			}
 			
-			if(FlxG.keys.justPressed.ESCAPE && !isTyping)
+			if(FlxG.keys.justPressed.ESCAPE)
 			{
 				persistentDraw = false;
 				ChartTestSubState.startConductor = conductorOffset;

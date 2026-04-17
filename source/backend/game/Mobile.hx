@@ -9,42 +9,38 @@ class Mobile
 {
     public static function getTap(inputState:FlxInputState):Bool
     {
-        for (touch in FlxG.touches.list)
+        var touch:FlxTouch = FlxG.touches.list[0];
+
+        if(touch == null || getMouse(inputState))
+            return getMouse(inputState);
+
+        switch(inputState)
         {
-            if(touch == null)
-                continue;
-
-            switch(inputState)
-            {
-                case PRESSED:
-                    if(touch.pressed) return true;
-                case RELEASED:
-                    if(touch.released) return true;
-                case JUST_PRESSED:
-                    if(touch.justPressed) return true;
-                case JUST_RELEASED:
-                    if(touch.justReleased) return true;
-                default:
-            }
+            case PRESSED:
+                return touch.pressed;
+            case RELEASED:
+                return touch.released;
+            case JUST_PRESSED:
+                return touch.justReleased;
+            case JUST_RELEASED:
+                return touch.justReleased;
         }
-
-        return getMouse(inputState);
     }
 
     // Used for mouse control on mobile
     public static function getMouse(inputState:FlxInputState):Bool
     {
-        if(FlxG.mouse == null)
-            return false;
-
-        return switch(inputState)
+        switch(inputState)
         {
-            case PRESSED: FlxG.mouse.pressed;
-            case RELEASED: FlxG.mouse.released;
-            case JUST_PRESSED: FlxG.mouse.justPressed;
-            case JUST_RELEASED: FlxG.mouse.justReleased;
-            default: false;
-        };
+            case PRESSED:
+                return FlxG.mouse.pressed;
+            case RELEASED:
+                return FlxG.mouse.released;
+            case JUST_PRESSED:
+                return FlxG.mouse.justReleased;
+            case JUST_RELEASED:
+                return FlxG.mouse.justReleased;
+        }
     }
 
     public static function getSwipe(direction:String = "ANY"):Bool
@@ -67,13 +63,9 @@ class Mobile
     {
         for (swipe in FlxG.swipes)
         {
-            // distance check first to avoid tiny accidental swipes
-            if(swipe.distance <= distance)
-                continue;
-
             return (and ?
-                ((swipe.degrees > lower && swipe.degrees < upper)):
-                ((swipe.degrees > lower || swipe.degrees < upper))
+                ((swipe.degrees > lower && swipe.degrees < upper) && swipe.distance > distance):
+                ((swipe.degrees > lower || swipe.degrees < upper) && swipe.distance > distance)
             );
         }
 

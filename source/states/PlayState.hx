@@ -24,17 +24,9 @@ import flixel.tweens.FlxTween;
 import flixel.tweens.FlxEase;
 import flixel.util.FlxTimer;
 import flixel.addons.display.FlxRuntimeShader;
-import backend.utils.ObjectPool;
-import backend.utils.InputManager;
-import backend.input.InputPipeline;
-import backend.time.Timebase;
-import backend.time.HitWindows;
-import backend.mobile.SafeArea;
-import backend.mobile.MobileTuner;
 import openfl.filters.BitmapFilter;
 import openfl.filters.ShaderFilter;
 import objects.*;
-import backend.psych.PsychLuaManager;
 import objects.hud.*;
 import objects.hud.game.*;
 import objects.note.*;
@@ -54,17 +46,10 @@ using StringTools;
 
 class PlayState extends MusicBeatState
 {
-	public var notePool:ObjectPool<Note>;
-	public static var enableOptimizedNotes:Bool = true;
-	public static var enableNotePooling:Bool = true;
-	static inline var NOTE_RENDER_MIN_AHEAD:Int = 1200;
-	static inline var NOTE_DESPAWN_BUFFER:Int = 300;
-
 	// song stuff
 	public static var EVENTS:EventSong;
 	public static var SONG:SwagSong;
 	public static var songDiff:String = "normal";
-	public var psychLua:PsychLuaManager;
 	// more song stuff
 	public var inst:FlxSound;
 	public var vocals:FlxSound;
@@ -108,8 +93,6 @@ class PlayState extends MusicBeatState
 	public var strumlines:FlxTypedGroup<Strumline>;
 	public var bfStrumline:Strumline;
 	public var dadStrumline:Strumline;
-	var strumlinesById:Map<Int, Strumline> = new Map();
-	var strumFrameCaches:Map<Int, StrumFrameCache> = new Map();
 	
 	var unspawnCount:Int = 0;
 	public var unspawnNotes:Array<Note> = [];
@@ -227,16 +210,7 @@ class PlayState extends MusicBeatState
 	override public function create()
 	{
 		super.create();
-		
 		instance = this;
-		MobileTuner.apply();
-		strumlinesById.clear();
-		if(!focusSignalsHooked)
-		{
-			FlxG.signals.focusLost.add(clearInputStates);
-			FlxG.signals.focusGained.add(clearInputStates);
-			focusSignalsHooked = true;
-		}
 
 		while(FlxG.sound.music.playing)
 			CoolUtil.playMusic();
@@ -257,11 +231,8 @@ class PlayState extends MusicBeatState
 			loadedScripts.push(newScript);
 		}
 		setScript("this", instance);
-		psychLua = new PsychLuaManager(SONG.song, songDiff);
 
-		notePool = new ObjectPool(Note, 0, null, function(note:Note) note.resetNote());
-
-		unspawnNotes = ChartLoader.getChart(SONG, notePool);
+		unspawnNotes = ChartLoader.getChart(SONG);
 		unspawnEvents = ChartLoader.getEvents(EVENTS);
 		
 		// adjusting the conductor
@@ -291,44 +262,23 @@ class PlayState extends MusicBeatState
 		FlxG.cameras.setDefaultDrawTarget(camGame, true);
 		
 		//camGame.zoom = 0.6;
-
-		// Initialize Psych Scripts (Cameras & Song Data available)
-		for(script in loadedScripts)
-			backend.psych.PsychBridge.initPsychScript(script, this);
-
 		callScript("create");
 		
 		stageBuild = new Stage();
-		var stageName:String = (Reflect.hasField(SONG, "stage") && SONG.stage != null) ? SONG.stage : SONG.song;
-		stageBuild.reloadStageFromSong(stageName, SONG.gfVersion);
+		stageBuild.reloadStageFromSong(SONG.song, SONG.gfVersion);
 		add(stageBuild);
 
 		classicZoom = defaultCamZoom;
 		
 		camGame.zoom = defaultCamZoom;
-		
-		// PSYCH ENGINE MINI: Auto-Detection
-		var isPsychMode:Bool = false;
-		var currentMod = backend.system.ModLoader.getMod(backend.system.ModLoader.currentModDirectory);
-		
-		// 1. Check Mod Type (set by our new ModLoader)
-		if(currentMod != null && currentMod.type == "psych")
-			isPsychMode = true;
-
-		// 2. Legacy/Specific Song Overrides
-		switch(SONG.song) {
-			case "useless"|"beep-power": isPsychMode = true;
-		}
-
-		if(isPsychMode)
+		switch(SONG.song)
 		{
-			hudBuild = new HudOG();
-			hudBuild.alpha = 0.0;
-		}
-		else
-		{
-			hudBuild = new HudDoido();
-			hudBuild.alpha = 0.0;
+			case "useless"|"beep-power":
+				hudBuild = new HudOG();
+				hudBuild.alpha = 0.0;
+			default:
+				hudBuild = new HudDoido();
+				hudBuild.alpha = 0.0;
 		}
 		
 		/*
@@ -398,14 +348,14 @@ class PlayState extends MusicBeatState
 					noteskins.push(assetModifier);
 			}
 		}
-		
+
 		dadStrumline = new Strumline(0, dad, downscroll, false, true, noteskins[0]);
 		dadStrumline.ID = 0;
-		addStrumline(dadStrumline);
+		strumlines.add(dadStrumline);
 		
 		bfStrumline = new Strumline(0, boyfriend, downscroll, true, false, noteskins[1]);
 		bfStrumline.ID = 1;
-		addStrumline(bfStrumline);
+		strumlines.add(bfStrumline);
 		
 		for(strumline in strumlines.members)
 		{
@@ -414,7 +364,6 @@ class PlayState extends MusicBeatState
 			strumline.scrollSpeed = SONG.speed;
 			strumline.updateHitbox();
 		}
-		registerStrumCaches();
 		
 		hudBuild.downscroll = SaveData.data.get("Downscroll");
 		hudBuild.updatePositions();
@@ -457,11 +406,6 @@ class PlayState extends MusicBeatState
 			addMusic(vocalsOpp);
 		}
 
-		// Re-inject Psych Scripts variables (Characters & Strumlines now available)
-		for(script in loadedScripts)
-			backend.psych.PsychBridge.initPsychScript(script, this);
-		callScript("onCreatePost");
-
 		Conductor.songPos = -Conductor.crochet * 5;
 		
 		// setting up the camera following
@@ -472,10 +416,15 @@ class PlayState extends MusicBeatState
 		
 		for(note in unspawnNotes)
 		{
-			var thisStrumline = getStrumline(note.strumlineID);
-			if(thisStrumline == null) continue;
+			var thisStrumline = dadStrumline;
+			for(strumline in strumlines)
+				if(note.strumlineID == strumline.ID)
+					thisStrumline = strumline;
 			
-			var noteAssetMod:String = (thisStrumline == dadStrumline ? noteskins[0] : noteskins[1]);
+			var noteAssetMod:String = noteskins[1];
+
+			if(thisStrumline == dadStrumline)
+				noteAssetMod = noteskins[0];
 			
 			note.updateData(note.songTime, note.noteData, note.noteType, noteAssetMod);
 			note.reloadSprite();
@@ -499,41 +448,10 @@ class PlayState extends MusicBeatState
 		}
 
 		#if TOUCH_CONTROLS
-		if(Controls.shouldUseTouch() && SaveData.data.get("useVirtualControls"))
-		{
-			hitbox = new Hitbox(noteskins[1]);
-			hitbox.cameras = [camOther];
-			add(hitbox);
-		}
+		hitbox = new Hitbox(noteskins[1]);
+		hitbox.cameras = [camOther];
+		add(hitbox);
 		#end
-
-		inputManager = new InputManager(#if TOUCH_CONTROLS hitbox #end);
-		// keep justPressed for a single frame to avoid double-hit + ghost miss
-		inputManager.holdFrames = 1;
-		pressed = inputManager.pressed;
-		justPressed = inputManager.justPressed;
-		released = inputManager.released;
-		useLegacyMode = SaveData.data.get("Legacy Mode");
-		timingPreset = Std.string(SaveData.data.get("Timing Preset"));
-		scrollPreset = Std.string(SaveData.data.get("Scroll Preset"));
-		inputPreset = Std.string(SaveData.data.get("Input Preset"));
-		var presetCfg = HitWindows.getPreset(timingPreset);
-		useInputBuffer = SaveData.data.get("Input Buffer");
-		useAntiMash = SaveData.data.get("Anti Mash");
-		inputBufferEarly = Std.int(SaveData.data.get("Input Early Buffer"));
-		inputBufferLate = Std.int(SaveData.data.get("Input Late Buffer"));
-		if(inputPreset.toLowerCase() == "buffered")
-		{
-			useInputBuffer = true;
-			inputBufferEarly = presetCfg.early;
-			inputBufferLate = presetCfg.late;
-			useAntiMash = presetCfg.spamGuard;
-		}
-		inputPipeline = new InputPipeline();
-		inputPipeline.configure(useInputBuffer, inputBufferEarly, inputBufferLate, useAntiMash);
-		timebase = new Timebase();
-		timebase.configure(!useLegacyMode, 18, 0.35);
-		timebase.setInitial(Conductor.songPos);
 		
 		if(hasCutscene() && !playedCutscene)
 		{
@@ -618,15 +536,13 @@ class PlayState extends MusicBeatState
 			startCountdown();
 
 		callScript("createPost");
-		if(psychLua != null) psychLua.onCreatePost();
 	}
 
 	public function startCountdown()
 	{
 		#if TOUCH_CONTROLS
 		createPad("pause", [camOther]);
-		if(hitbox != null)
-			hitbox.toggleHbx(true);
+		hitbox.toggleHbx(true);
 		#end
 
 		var daCount:Int = 0;
@@ -634,8 +550,6 @@ class PlayState extends MusicBeatState
 		var countTimer = new FlxTimer().start(Conductor.crochet / 1000, function(tmr:FlxTimer)
 		{
 			Conductor.songPos = -Conductor.crochet * (4 - daCount);
-			if(timebase != null)
-				timebase.setInitial(Conductor.songPos);
 			
 			if(daCount == 0)
 			{
@@ -666,8 +580,6 @@ class PlayState extends MusicBeatState
 			{
 				startSong();
 			}
-			if(psychLua != null)
-				psychLua.onCountdownTick(daCount);
 
 			if(daCount != 4)
 			{
@@ -773,10 +685,6 @@ class PlayState extends MusicBeatState
 	public function startSong()
 	{
 		startedSong = true;
-		if(timebase != null)
-			timebase.start();
-		if(psychLua != null)
-			psychLua.onSongStart();
 		for(music in musicList)
 		{
 			music.stop();
@@ -885,8 +793,6 @@ class PlayState extends MusicBeatState
 			if(note.noteType != "no animation" && thisChar.specialAnim != 2)
 				thisChar.playNote(note);
 		}
-		if(psychLua != null)
-			psychLua.goodNoteHit(note, strumline);
 	}
 	function onNoteMiss(note:Note, strumline:Strumline, ghostTap:Bool = false)
 	{
@@ -925,8 +831,6 @@ class PlayState extends MusicBeatState
 			if(strumline.isPlayer)
 				popUpRating(note, strumline, true);
 		}
-		if(psychLua != null)
-			psychLua.noteMiss(note, strumline);
 	}
 	function onNoteHold(note:Note, strumline:Strumline)
 	{
@@ -1079,22 +983,10 @@ class PlayState extends MusicBeatState
 		hudBuild.addRating(daRating);
 	}
 	
-	public var pressed:Array<Bool> 		= [false, false, false, false];
-	public var justPressed:Array<Bool> 	= [false, false, false, false];
-	public var released:Array<Bool> 	= [false, false, false, false];
-	var inputManager:InputManager = null;
-	var inputPipeline:InputPipeline = null;
-	var useInputBuffer:Bool = false;
-	var useAntiMash:Bool = false;
-	var inputBufferEarly:Int = 0;
-	var inputBufferLate:Int = 0;
-	var useLegacyMode:Bool = true;
-	var timingPreset:String = "Legacy";
-	var scrollPreset:String = "Legacy";
-	var inputPreset:String = "Legacy";
-	public var timebase:Timebase = null;
-	var focusSignalsHooked:Bool = false;
-		
+	public var pressed:Array<Bool> 		= [];
+	public var justPressed:Array<Bool> 	= [];
+	public var released:Array<Bool> 	= [];
+	
 	var playerSinging:Bool = false;
 
 	function strToChar(str:String):CharGroup
@@ -1107,96 +999,6 @@ class PlayState extends MusicBeatState
 		}
 	}
 
-	inline function registerStrumline(strumline:Strumline):Void
-	{
-		if(strumline == null) return;
-		strumlinesById.set(strumline.ID, strumline);
-	}
-
-	inline function getStrumline(id:Int):Strumline
-	{
-		return strumlinesById.exists(id) ? strumlinesById.get(id) : null;
-	}
-
-	inline function addStrumline(strumline:Strumline):Void
-	{
-		if(strumline == null) return;
-		strumlines.add(strumline);
-		registerStrumline(strumline);
-		getFrameCacheFor(strumline);
-	}
-
-	inline function noteSpawnWindow(strumline:Strumline):Int
-	{
-		if(strumline == null) return 3200;
-		var spawnTime:Int = 3200;
-		if(strumline.scrollSpeed <= 1.5)
-			spawnTime *= 2;
-		return spawnTime;
-	}
-
-	inline function noteRenderWindow(strumline:Strumline):Int
-	{
-		if(!enableOptimizedNotes)
-			return 0x3B9ACA00; // effectively "infinite" without risking overflow
-
-		var renderTime:Int = noteSpawnWindow(strumline);
-		if(renderTime < NOTE_RENDER_MIN_AHEAD)
-			renderTime = NOTE_RENDER_MIN_AHEAD;
-
-		return renderTime;
-	}
-
-	inline function getFrameCacheFor(strumline:Strumline):StrumFrameCache
-	{
-		if(strumline == null) return null;
-		if(!strumFrameCaches.exists(strumline.ID))
-			strumFrameCaches.set(strumline.ID, new StrumFrameCache());
-		return strumFrameCaches.get(strumline.ID);
-	}
-
-	inline function recycleNote(note:Note):Void
-	{
-		if(note == null) return;
-
-		if(enableNotePooling && notePool != null)
-		{
-			note.resetNote();
-			note.kill();
-			notePool.recycle(note);
-		}
-		else
-			note.destroy();
-	}
-
-	inline function pooledGhostNote():Note
-	{
-		if(notePool != null)
-			return notePool.get();
-
-		return new Note();
-	}
-
-	inline function registerStrumCaches():Void
-	{
-		strumFrameCaches.clear();
-		for(strumline in strumlines.members)
-			if(strumline != null)
-				strumFrameCaches.set(strumline.ID, new StrumFrameCache());
-	}
-
-	inline function isRenderableNote(note:Note, songPos:Float, renderAhead:Int, noteCrochet:Float):Bool
-	{
-		if(note == null) return false;
-		if(!enableOptimizedNotes) return true;
-
-		var timeDiff:Float = note.songTime - songPos;
-		if(timeDiff < -(noteCrochet + NOTE_DESPAWN_BUFFER))
-			return true; // keep trailing pieces for misses/clipping
-
-		return timeDiff <= renderAhead + note.holdLength + noteCrochet;
-	}
-
 	function stringToCam(str:String):FlxCamera {
 		return switch(str.toLowerCase())
 		{
@@ -1206,148 +1008,9 @@ class PlayState extends MusicBeatState
 			//case 'camother'|'other': camOther; // meant for transitions only
 		}
 	}
-
-	inline function clearInputStates():Void
-	{
-		if(inputManager != null)
-		{
-			inputManager.clearStates();
-			return;
-		}
-
-		for(i in 0...4)
-		{
-			pressed[i] = false;
-			justPressed[i] = false;
-			released[i] = false;
-		}
-	}
-
-	inline function updateInputStates():Bool
-	{
-		if(inputManager != null)
-		{
-			inputManager.update();
-			return justPressed[0] || justPressed[1] || justPressed[2] || justPressed[3];
-		}
-
-		pressed[0] = Controls.pressed(LEFT);
-		pressed[1] = Controls.pressed(DOWN);
-		pressed[2] = Controls.pressed(UP);
-		pressed[3] = Controls.pressed(RIGHT);
-
-		justPressed[0] = Controls.justPressed(LEFT);
-		justPressed[1] = Controls.justPressed(DOWN);
-		justPressed[2] = Controls.justPressed(UP);
-		justPressed[3] = Controls.justPressed(RIGHT);
-
-		released[0] = Controls.released(LEFT);
-		released[1] = Controls.released(DOWN);
-		released[2] = Controls.released(UP);
-		released[3] = Controls.released(RIGHT);
-
-		#if TOUCH_CONTROLS
-		if(hitbox != null && Controls.canTouch)
-			for(i in 0...CoolUtil.directions.length) {
-				if(hitbox.checkButton(CoolUtil.directions[i], PRESSED))
-					pressed[i] = true;
-
-				if(hitbox.checkButton(CoolUtil.directions[i], JUST_PRESSED))
-					justPressed[i] = true;
-
-				if(hitbox.checkButton(CoolUtil.directions[i], RELEASED))
-					released[i] = true;
-			}
-		#end
-
-		return justPressed[0] || justPressed[1] || justPressed[2] || justPressed[3];
-	}
-
-	inline function resolveBufferedPress(strumline:Strumline, lane:Int, songPos:Float):Bool
-	{
-		if(inputPipeline == null || !inputPipeline.hasPress(lane))
-			return false;
-
-		var evt = inputPipeline.peekPress(lane);
-		if(evt == null)
-			return false;
-
-		var bestNote:Note = null;
-		var bestAbs:Float = Math.POSITIVE_INFINITY;
-		var closestDelta:Float = Math.POSITIVE_INFINITY;
-		var closestSigned:Float = 0;
-		var baseEarly:Float = Timings.minTiming + inputPipeline.earlyMs;
-		var baseLate:Float = Timings.minTiming + inputPipeline.lateMs;
-
-		for(note in strumline.noteGroup)
-		{
-			if(note == null || note.noteData != lane || note.missed || note.gotHit)
-				continue;
-
-			var minTiming:Float = (note.mustMiss ? Timings.getTimings("good")[1] : Timings.minTiming);
-			var earlyWin:Float = minTiming + inputPipeline.earlyMs;
-			var lateWin:Float = minTiming + inputPipeline.lateMs;
-			var delta:Float = note.songTime + Conductor.inputOffset - evt.timeMs;
-			var absDelta:Float = Math.abs(delta);
-
-			if(absDelta < closestDelta)
-			{
-				closestDelta = absDelta;
-				closestSigned = delta;
-			}
-
-			if(delta >= -earlyWin && delta <= lateWin)
-			{
-				if(bestNote == null || absDelta < bestAbs || (absDelta == bestAbs && note.songTime < bestNote.songTime))
-				{
-					bestNote = note;
-					bestAbs = absDelta;
-				}
-			}
-		}
-
-		if(bestNote != null)
-		{
-			inputPipeline.consumePress(lane);
-			checkNoteHit(bestNote, strumline);
-			return true;
-		}
-
-		var shouldDiscard:Bool = false;
-		if(closestDelta == Math.POSITIVE_INFINITY)
-			shouldDiscard = true;
-		else if(closestSigned >= 0 && closestDelta > baseEarly)
-			shouldDiscard = true;
-		else if(closestSigned < 0 && closestDelta > baseLate)
-			shouldDiscard = true;
-		else if(songPos - evt.timeMs > baseLate + 32)
-			shouldDiscard = true;
-
-		if(shouldDiscard)
-		{
-			inputPipeline.consumePress(lane);
-			if(startedCountdown)
-			{
-				if(ghostTapping == "NEVER" || (ghostTapping == "WHILE IDLING" && !isIdling))
-				{
-					var ghost = pooledGhostNote();
-					ghost.updateData(0, lane, "none", assetModifier);
-					onNoteMiss(ghost, strumline, true);
-				}
-			}
-			return true;
-		}
-
-		return false;
-	}
 	
 	override function update(elapsed:Float)
 	{
-		if(psychLua != null) psychLua.onUpdate(elapsed);
-		
-		for(script in loadedScripts)
-			backend.psych.PsychBridge.updateScriptVars(script, this);
-			
 		callScript("update", [elapsed]);
 		super.update(elapsed);
 		var followLerp:Float = cameraSpeed * 5 * elapsed;
@@ -1361,7 +1024,6 @@ class PlayState extends MusicBeatState
 		if(Controls.justPressed(RESET))
 			startGameOver();
 		
-		#if !html5
 		if(SaveData.data.get("Discord RPC") && !paused)
 		{
 			discordUpdateTime -= elapsed;
@@ -1375,7 +1037,6 @@ class PlayState extends MusicBeatState
 				DiscordIO.changePresence(presenceTxt, false);
 			}
 		}
-		#end
 		
 		// no turning back you gotta restart now sorry
 		if(botplay && startedSong)
@@ -1451,72 +1112,87 @@ class PlayState extends MusicBeatState
 		#end
 		
 		// syncSong
-		if(timebase != null)
-		{
-			Conductor.songPos = timebase.tick(elapsed, inst, songSpeed, startedCountdown && !paused);
-		}
-		else if(startedCountdown)
+		if(startedCountdown)
 			Conductor.songPos += elapsed * 1000 * songSpeed;
 
-		var songPos:Float = Conductor.songPos;
-		var anyJustPressed:Bool = updateInputStates();
-		if(inputPipeline != null)
-		{
-			inputPipeline.configure(useInputBuffer, inputBufferEarly, inputBufferLate, useAntiMash);
-			inputPipeline.update(songPos, Conductor.inputOffset, pressed, justPressed, released);
-			if(useInputBuffer || useAntiMash)
-				anyJustPressed = anyJustPressed || inputPipeline.hasPendingPress();
+		pressed = [
+			Controls.pressed(LEFT),
+			Controls.pressed(DOWN),
+			Controls.pressed(UP),
+			Controls.pressed(RIGHT),
+		];
+		justPressed = [
+			Controls.justPressed(LEFT),
+			Controls.justPressed(DOWN),
+			Controls.justPressed(UP),
+			Controls.justPressed(RIGHT),
+		];
+		released = [
+			Controls.released(LEFT),
+			Controls.released(DOWN),
+			Controls.released(UP),
+			Controls.released(RIGHT),
+		];
+
+		#if TOUCH_CONTROLS
+		for(i in 0...CoolUtil.directions.length) {
+			if(hitbox.checkButton(CoolUtil.directions[i], PRESSED))
+				pressed[i] = true;
+
+			if(hitbox.checkButton(CoolUtil.directions[i], JUST_PRESSED))
+				justPressed[i] = true;
+
+			if(hitbox.checkButton(CoolUtil.directions[i], RELEASED))
+				released[i] = true;
 		}
+		#end
 
 		playerSinging = false;
 
 		// playing events
-		while(eventCount < unspawnEvents.length)
+		if(eventCount < unspawnEvents.length)
 		{
 			var daEvent = unspawnEvents[eventCount];
-			if(daEvent.songTime > songPos)
-				break;
-
-			#if debug
-			Logs.print('${daEvent.eventName} // ${daEvent.value1} // ${daEvent.value2} // ${daEvent.value3}');
-			#end
-			onEventHit(daEvent);
-			eventCount++;
+			if(daEvent.songTime <= Conductor.songPos)
+			{
+				#if debug
+				Logs.print('${daEvent.eventName} // ${daEvent.value1} // ${daEvent.value2} // ${daEvent.value3}');
+				#end
+				onEventHit(daEvent);
+				eventCount++;
+			}
 		}
 		
 		// adding notes to strumlines
-		while(unspawnCount < unspawnNotes.length)
+		if(unspawnCount < unspawnNotes.length)
 		{
 			var unsNote = unspawnNotes[unspawnCount];
 			
-			var thisStrumline = getStrumline(unsNote.strumlineID);
-			if(thisStrumline == null)
+			var thisStrumline = dadStrumline;
+			for(strumline in strumlines)
+				if(unsNote.strumlineID == strumline.ID)
+					thisStrumline = strumline;
+			
+			var spawnTime:Int = 3200;
+			if(thisStrumline.scrollSpeed <= 1.5)
+				spawnTime *= 2;
+			
+			if(unsNote.songTime - Conductor.songPos <= spawnTime)
 			{
+				unsNote.y = FlxG.height * 4;
+				thisStrumline.addNote(unsNote);
 				unspawnCount++;
-				continue;
 			}
-
-			var spawnTime:Int = noteSpawnWindow(thisStrumline);
-			if(unsNote.songTime - songPos > spawnTime)
-				break;
-
-			unsNote.y = FlxG.height * 4;
-			thisStrumline.addNote(unsNote);
-			unspawnCount++;
 		}
 		
 		// strumline handler!!
 		for(strumline in strumlines.members)
 		{
-			if(strumline == null)
-				continue;
-
 			if(strumline.isPlayer)
 				strumline.botplay = botplay;
 			
 			for(strum in strumline.strumGroup)
 			{
-				if(strum == null) continue;
 				// no botplay animations
 				if(strumline.isPlayer && !strumline.botplay)
 				{
@@ -1538,51 +1214,33 @@ class PlayState extends MusicBeatState
 						strum.playAnim("static");
 				}
 			}
-		}
-		applySongSpecificEffects(elapsed);
-		updateNotes();
-		
-		if(anyJustPressed)
-		{
-			var pipelineActive:Bool = (inputPipeline != null && (useInputBuffer || useAntiMash));
-			for(strumline in strumlines.members)
+
+			for(strumline in strumlines)
 			{
-				if(strumline == null)
-					continue;
+				if(SONG.song == "exploitation")
+				{
+					for(strum in strumline.strumGroup)
+						strum.angle += elapsed * (curStep % 16 <= 1 ? 128 : 8) * (strum.strumData % 2 == 0 ? 1 : -1);
+					for(note in strumline.allNotes)
+					{
+						note.noteAngle = Math.sin((Conductor.songPos - note.songTime) / 100) * 10 * (strumline.isPlayer ? 1 : -1);
+					}
+				}
+			}
 
-				if(strumline.botplay || !strumline.isPlayer)
-					continue;
-
-				if(strumline.noteGroup.length <= 0)
-					continue;
-				
+			updateNotes();
+			
+			if(justPressed.contains(true) && !strumline.botplay && strumline.isPlayer)
+			{
 				for(i in 0...justPressed.length)
 				{
-					if(pipelineActive)
-					{
-						resolveBufferedPress(strumline, i, songPos);
-						continue;
-					}
-
 					if(justPressed[i])
 					{
-						var cache = getFrameCacheFor(strumline);
-						var possibleHitNotes:Array<Note> = (cache != null ? cache.hitBuffer : null);
-						if(possibleHitNotes == null)
-							possibleHitNotes = [];
-						else
-							possibleHitNotes.resize(0); // gets the possible ones
+						var possibleHitNotes:Array<Note> = []; // gets the possible ones
 						var canHitNote:Note = null;
 						
 						for(note in strumline.noteGroup)
 						{
-							if(note == null) continue;
-							
-							// Optimization: Early Exit
-							// If the note is more than 2 seconds in the future, stop checking.
-							// Notes are generally sorted by time.
-							if (note.songTime > Conductor.songPos + 2000) break;
-
 							var noteDiff:Float = note.noteDiff();
 							
 							var minTiming:Float = Timings.minTiming;
@@ -1623,7 +1281,7 @@ class PlayState extends MusicBeatState
 									// i don't think vocals should stop when ghost tapping
 									// vocals.volume = 0;
 
-									var note = pooledGhostNote();
+									var note = new Note();
 									note.updateData(0, i, "none", assetModifier);
 									//note.reloadSprite();
 									onNoteMiss(note, strumline, true);
@@ -1701,44 +1359,13 @@ class PlayState extends MusicBeatState
 		
 		health = FlxMath.bound(health, 0, 2); // bounds the health
 		callScript("updatePost", [elapsed]);
-		if(psychLua != null) psychLua.onUpdatePost(elapsed);
-	}
-
-	inline function applySongSpecificEffects(elapsed:Float):Void
-	{
-		if(SONG.song != "exploitation")
-			return;
-
-		var songPos:Float = Conductor.songPos;
-		for(strumline in strumlines.members)
-		{
-			if(strumline == null)
-				continue;
-
-			for(strum in strumline.strumGroup)
-				if(strum != null)
-					strum.angle += elapsed * (curStep % 16 <= 1 ? 128 : 8) * (strum.strumData % 2 == 0 ? 1 : -1);
-
-			for(note in strumline.allNotes)
-			{
-				if(note == null) continue;
-				note.noteAngle = Math.sin((songPos - note.songTime) / 100) * 10 * (strumline.isPlayer ? 1 : -1);
-			}
-		}
 	}
 
 	public function updateNotes()
 	{
-		var songPos:Float = Conductor.songPos;
-		var inputOffset:Float = Conductor.inputOffset;
-		var noteCrochet:Float = Conductor.crochet;
 		isIdling = true;
 		for(strumline in strumlines)
 		{
-			if(strumline == null) continue;
-			var frameCache = getFrameCacheFor(strumline);
-			if(frameCache != null)
-				frameCache.reset();
 			if(strumline.isPlayer)
 			{
 				var char = strumline.character.char;
@@ -1746,17 +1373,13 @@ class PlayState extends MusicBeatState
 					isIdling = false;
 			}
 
-			var renderAhead:Int = noteRenderWindow(strumline);
-			var scrollSpeed:Float = strumline.scrollSpeed * 0.45;
-
 			for(hold in strumline.holdGroup)
 			{
-				if(hold == null) continue;
 				if(hold.scrollSpeed != strumline.scrollSpeed)
 				{
 					hold.scrollSpeed = strumline.scrollSpeed;
 					
-					hold.holdClipHeight = hold.noteCrochet * scrollSpeed + 2;
+					hold.holdClipHeight = hold.noteCrochet * (strumline.scrollSpeed * 0.45) + 2;
 					if(!hold.isHoldEnd)
 					{
 						var holdWidth:Float = hold.frameWidth * hold.scale.x;
@@ -1775,56 +1398,41 @@ class PlayState extends MusicBeatState
 			
 			for(note in strumline.allNotes)
 			{
-				if(note == null) continue;
 				if(!paused)
 				{
-					if(songPos >= note.songTime + inputOffset + note.holdLength + noteCrochet + NOTE_DESPAWN_BUFFER)
+					var despawnTime:Int = 300;
+					
+					if(Conductor.songPos >= note.songTime + Conductor.inputOffset + note.holdLength + Conductor.crochet + despawnTime)
 					{
 						if(!note.gotHit && !note.missed && !note.mustMiss && !strumline.botplay)
 							onNoteMiss(note, strumline);
 						
 						note.clipRect = null;
 						strumline.removeNote(note);
-						recycleNote(note);
+						note.destroy();
 						continue;
 					}
 
 					note.setAlpha();
 				}
-
-				var renderable:Bool = (!enableOptimizedNotes || isRenderableNote(note, songPos, renderAhead, noteCrochet));
-				if(renderable && frameCache != null)
+				note.updateHitbox();
+				note.offset.x += note.frameWidth * note.scale.x / 2;
+				if(note.isHold)
 				{
-					frameCache.renderNotes.push(note);
-					if(note.isHold)
-						frameCache.holdNotes.push(note);
+					note.offset.y = 0;
+					note.origin.y = 0;
 				}
-
-				if(renderable)
-				{
-					note.updateHitbox();
-					note.offset.x += note.frameWidth * note.scale.x / 2;
-					if(note.isHold)
-					{
-						note.offset.y = 0;
-						note.origin.y = 0;
-					}
-					else
-						note.offset.y += note.frameHeight * note.scale.y / 2;
-				}
+				else
+					note.offset.y += note.frameHeight * note.scale.y / 2;
 			}
 		
-			var renderNotes = (frameCache != null && enableOptimizedNotes) ? frameCache.renderNotes : strumline.noteGroup.members;
-			for(note in renderNotes)
+			for(note in strumline.noteGroup)
 			{
-				if(note == null) continue;
-				if(note.isHold) continue;
 				var thisStrum = strumline.strumGroup.members[note.noteData];
-				if(thisStrum == null) continue;
 				
 				// follows the strum
 				var offsetX = note.noteOffset.x;
-				var offsetY = (note.songTime - songPos) * scrollSpeed;
+				var offsetY = (note.songTime - Conductor.songPos) * (strumline.scrollSpeed * 0.45);
 				
 				var noteAngle:Float = (note.noteAngle + thisStrum.strumAngle);
 				if(strumline.downscroll)
@@ -1838,8 +1446,7 @@ class PlayState extends MusicBeatState
 				// alings the hold notes
 				for(hold in note.children)
 				{
-					if(hold == null) continue;
-					var offsetY = hold.noteCrochet * scrollSpeed * hold.ID;
+					var offsetY = hold.noteCrochet * (strumline.scrollSpeed * 0.45) * hold.ID;
 					
 					hold.angle = -noteAngle;
 					CoolUtil.setNotePos(hold, note, noteAngle, offsetX, offsetY);
@@ -1850,12 +1457,12 @@ class PlayState extends MusicBeatState
 					// hitting / missing notes automatically
 					if(strumline.botplay)
 					{
-						if(note.songTime - songPos <= 0 && !note.gotHit && !note.mustMiss)
+						if(note.songTime - Conductor.songPos <= 0 && !note.gotHit && !note.mustMiss)
 							checkNoteHit(note, strumline);
 					}
 					else
 					{
-						if(songPos >= note.songTime + Timings.getTimings("good")[1]
+						if(Conductor.songPos >= note.songTime + Timings.getTimings("good")[1]
 						&& !note.gotHit && !note.missed && !note.mustMiss)
 							onNoteMiss(note, strumline);
 					}
@@ -1868,32 +1475,25 @@ class PlayState extends MusicBeatState
 			
 			if(!paused)
 			{
-				var holdRender = (frameCache != null && enableOptimizedNotes) ? frameCache.holdNotes : strumline.holdGroup.members;
-				for(hold in holdRender)
+				for(hold in strumline.holdGroup)
 				{
-					if(hold == null) continue;
 					var holdParent = hold.parentNote;
 					if(holdParent != null)
 					{
 						var thisStrum = strumline.strumGroup.members[hold.noteData];
-						if(thisStrum == null) continue;
 						
 						if(holdParent.gotHeld && !hold.missed)
 						{
 							hold.gotHeld = true;
-							hold.holdHitLength = (songPos - hold.songTime);
+							hold.holdHitLength = (Conductor.songPos - hold.songTime);
 							
 							// calculating the clipping by how much you held the note
 							if(!strumline.pauseNotes)
 							{
-								var daRect:FlxRect = hold.clipRect;
-								if(daRect == null)
-									daRect = new FlxRect();
-
-								daRect.x = 0;
-								daRect.y = 0;
-								daRect.width = hold.frameWidth;
-								daRect.height = hold.frameHeight;
+								var daRect = new FlxRect(0, 0,
+									hold.frameWidth,
+									hold.frameHeight
+								);
 								
 								var holdID:Float = hold.ID;
 								
@@ -1988,8 +1588,6 @@ class PlayState extends MusicBeatState
 				Conductor.setBPM(change.bpm);
 
 		hudBuild.beatHit(curBeat);
-		if(psychLua != null)
-			psychLua.onBeatHit(curBeat);
 		
 		if(curBeat % 4 == 0)
 			zoomCamera(0.05, 0.025);
@@ -2031,8 +1629,6 @@ class PlayState extends MusicBeatState
 		super.stepHit();
 		stageBuild.stepHit(curStep);
 		hudBuild.stepHit(curStep);
-		if(psychLua != null)
-			psychLua.onStepHit(curStep);
 		syncSong();
 		
 		callScript("stepHit", [curStep]);
@@ -2047,23 +1643,21 @@ class PlayState extends MusicBeatState
 		
 		if(inst.playing)
 		{
-			if(timebase != null)
-			{
-				// timebase.syncWithAudio(inst); // Disabled to allow smooth drift correction in tick()
-				Conductor.songPos = timebase.songPos;
-			}
-			else if(Math.abs(Conductor.songPos - inst.time) >= 20 && Conductor.songPos - inst.time <= 5000)
+			// syncs the conductor
+			if(Math.abs(Conductor.songPos - inst.time) >= 20 && Conductor.songPos - inst.time <= 5000)
 			{
 				Logs.print('synced song ${Conductor.songPos} to ${inst.time}');
 				Conductor.songPos = inst.time;
 			}
 			
+			// syncs the other music to the inst
 			for(music in musicList)
 			{
-				if(music == null || music == inst) continue;
-
-				if(music.playing && Math.abs(music.time - inst.time) >= 20)
-					music.time = inst.time;
+				if(music == inst) return;
+				
+				if(music.playing)
+					if(Math.abs(music.time - inst.time) >= 20)
+						music.time = inst.time;
 			}
 		}
 		
@@ -2255,8 +1849,12 @@ class PlayState extends MusicBeatState
 			}
 			for(note in unspawnNotes)
 			{
-				var thisStrumline = getStrumline(note.strumlineID);
-				if(thisStrumline == null || thisStrumline.customData || note.gotHit) continue;
+				var thisStrumline = dadStrumline;
+				for(strumline in strumlines)
+					if(note.strumlineID == strumline.ID)
+						thisStrumline = strumline;
+				
+				if(thisStrumline.customData || note.gotHit) continue;
 				if(!thisStrumline.isPlayer)
 					note.visible = !SaveData.data.get('Middlescroll');
 			}
@@ -2307,17 +1905,9 @@ class PlayState extends MusicBeatState
 		for(strumline in strumlines.members)
 			if(!strumline.isPlayer)
 				for(strum in strumline.strumGroup)
-					strum.visible = !(SaveData.data.get('Middlescroll') && !Controls.shouldUseTouch());
+					strum.visible = !SaveData.data.get('Middlescroll');
 
 		var strumPos:Array<Float> = [FlxG.width / 2, FlxG.width / 4];
-
-		// Mobile layout: both strumlines centered and separated for touch comfort
-		if(Controls.shouldUseTouch())
-		{
-			var gap:Float = CoolUtil.noteWidth() * 3;
-			var center:Float = FlxG.width / 2;
-			return [center - gap, center + gap];
-		}
 
 		if(SaveData.data.get('Middlescroll'))
 			return [-strumPos[0], strumPos[0]];
@@ -2376,49 +1966,6 @@ class PlayState extends MusicBeatState
 	}
 
 	function onEventHit(daEvent:EventNote) {
-		if(psychLua != null)
-			psychLua.onEvent(daEvent.eventName, daEvent.value1, daEvent.value2);
-			
-		// PSYCH ENGINE MINI: Dynamic Custom Event Loading
-		var eventNameClean = daEvent.eventName.trim();
-		var customEventPath = 'custom_events/' + eventNameClean;
-		// Check if we need to load a script for this event
-		var alreadyLoaded = false;
-		for(s in loadedScripts) if(s.name.contains(eventNameClean)) alreadyLoaded = true;
-		
-		if(!alreadyLoaded) {
-			var scriptPath:String = null;
-			var isLua:Bool = false;
-			
-			// Prioritize HScript for this engine, but check Lua too
-			if(backend.system.ModPaths.exists(customEventPath + '.lua')) {
-				scriptPath = customEventPath + '.lua';
-				isLua = true;
-			}
-			else if(backend.system.ModPaths.exists(customEventPath + '.hx'))
-				scriptPath = customEventPath + '.hx';
-			else if(backend.system.ModPaths.exists(customEventPath + '.hxc'))
-				scriptPath = customEventPath + '.hxc';
-				
-			if(scriptPath != null) {
-				if(isLua) {
-					if(psychLua != null) {
-						psychLua.addScript(scriptPath);
-						// Lua scripts are auto-added to the manager list, so next update/event calls will work
-						// We might want to init it or call onCreate manually if needed, but PsychLuaManager does it on new() typically. 
-						// For dynamic add, we might need a manual init call if not handled.
-						// Assuming addScript in our new Manager handles basic init.
-					}
-				} else {
-					var newScript = new crowplexus.iris.Iris(backend.system.ModPaths.resolveAssetPath(scriptPath), {name: eventNameClean, autoRun: true, autoPreset: true});
-					backend.psych.PsychBridge.initPsychScript(newScript, this);
-					loadedScripts.push(newScript);
-					newScript.call("onCreate", []);
-					newScript.call("onEvent", [daEvent.eventName, daEvent.value1, daEvent.value2]);
-				}
-			}
-		}
-
 		switch(daEvent.eventName)
 		{
 			case 'Play Animation':
@@ -2534,8 +2081,6 @@ class PlayState extends MusicBeatState
 					cam.angle = newAngle;
 		}
 
-		// Support both standard Psych 'onEvent' and internal 'onEventHit'
-		callScript("onEvent", [daEvent.eventName, daEvent.value1, daEvent.value2]);
 		callScript("onEventHit", [daEvent.eventName, daEvent.value1, daEvent.value2, daEvent.value3]);
 	}
 
@@ -2557,37 +2102,5 @@ class PlayState extends MusicBeatState
 	{
 		for(script in loadedScripts)
 			script.set(name, value, allowOverride);
-	}
-
-	override public function destroy():Void
-	{
-		if(focusSignalsHooked)
-		{
-			FlxG.signals.focusLost.remove(clearInputStates);
-			FlxG.signals.focusGained.remove(clearInputStates);
-			focusSignalsHooked = false;
-		}
-		if(inputManager != null)
-		{
-			inputManager.destroy();
-			inputManager = null;
-		}
-		super.destroy();
-	}
-}
-
-private class StrumFrameCache
-{
-	public var renderNotes:Array<Note> = [];
-	public var holdNotes:Array<Note> = [];
-	public var hitBuffer:Array<Note> = [];
-
-	public function new() {}
-
-	public inline function reset():Void
-	{
-		renderNotes.resize(0);
-		holdNotes.resize(0);
-		hitBuffer.resize(0);
 	}
 }

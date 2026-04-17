@@ -7,37 +7,8 @@ import flxanimate.FlxAnimate;
 import backend.utils.CharacterUtil;
 import backend.utils.CharacterUtil.*;
 import objects.note.Note;
-import haxe.Json;
-import backend.system.ModLoader;
 
 using StringTools;
-
-// Psych Engine typedefs for compatibility
-typedef CharacterFile = {
-	var animations:Array<AnimArray>;
-	var image:String;
-	var scale:Float;
-	var sing_duration:Float;
-	var healthicon:String;
-
-	var position:Array<Float>;
-	var camera_position:Array<Float>;
-
-	var flip_x:Bool;
-	var no_antialiasing:Bool;
-	var healthbar_colors:Array<Int>;
-	var vocals_file:String;
-	@:optional var _editor_isPlayer:Null<Bool>;
-}
-
-typedef AnimArray = {
-	var anim:String;
-	var name:String;
-	var fps:Int;
-	var loop:Bool;
-	var indices:Array<Int>;
-	var offsets:Array<Int>;
-}
 
 class Character extends FlxAnimate
 {
@@ -76,15 +47,6 @@ class Character extends FlxAnimate
 	// you're probably gonna use sparrow by default?
 	var spriteType:SpriteType = SPARROW;
 
-	// Psych Engine Compatibility Fields
-	public var jsonScale:Float = 1;
-	public var noAntialiasing:Bool = false;
-	public var originalFlipX:Bool = false;
-	public var healthIcon:String = 'face';
-	public var healthColorArray:Array<Int> = [255, 0, 0];
-	public var positionArray:Array<Float> = [0, 0];
-	public var vocalsFile:String = '';
-
 	public function new(curChar:String = "bf", isPlayer:Bool = false, onEditor:Bool = false)
 	{
 		super(0,0,false);
@@ -96,8 +58,6 @@ class Character extends FlxAnimate
 		isPixelSprite = false;
 		
 		var doidoChar = CharacterUtil.defaultChar();
-		var foundInDoido = true;
-
 		switch(curChar)
 		{
 			case "zero":
@@ -304,54 +264,45 @@ class Character extends FlxAnimate
 				];
 			
 			default: // case "bf"
-				if(!["bf", "face"].contains(curChar)) {
-					// Check if Psych Engine character exists
-					var psychCharPath = 'characters/$curChar.json';
-					if(Paths.fileExists(psychCharPath)) {
-						foundInDoido = false;
-					} else {
-						curChar = (isPlayer ? "bf" : "face");
-					}
+				if(!["bf", "face"].contains(curChar))
+					curChar = (isPlayer ? "bf" : "face");
+
+				if(curChar == "bf")
+				{
+					doidoChar.spritesheet += 'bf/BOYFRIEND';
+					doidoChar.anims = [
+						['idle', 			'BF idle dance', 		24, false],
+						['singUP', 			'BF NOTE UP0', 			24, false],
+						['singLEFT', 		'BF NOTE LEFT0', 		24, false],
+						['singRIGHT', 		'BF NOTE RIGHT0', 		24, false],
+						['singDOWN', 		'BF NOTE DOWN0', 		24, false],
+						['singUPmiss', 		'BF NOTE UP MISS', 		24, false],
+						['singLEFTmiss', 	'BF NOTE LEFT MISS', 	24, false],
+						['singRIGHTmiss', 	'BF NOTE RIGHT MISS', 	24, false],
+						['singDOWNmiss', 	'BF NOTE DOWN MISS', 	24, false],
+						['hey', 			'BF HEY', 				24, false],
+						['scared', 			'BF idle shaking', 		24, true],
+					];
+					
+					flipX = true;
 				}
+				else if(curChar == "face")
+				{
+					spriteType = ATLAS;
+					doidoChar.spritesheet += 'face';
+					doidoChar.anims = [
+						['idle', 			'idle-alive', 		24, false],
+						['idlemiss', 		'idle-dead', 		24, false],
 
-				if(foundInDoido) {
-					if(curChar == "bf")
-					{
-						doidoChar.spritesheet += 'bf/BOYFRIEND';
-						doidoChar.anims = [
-							['idle', 			'BF idle dance', 		24, false],
-							['singUP', 			'BF NOTE UP0', 			24, false],
-							['singLEFT', 		'BF NOTE LEFT0', 		24, false],
-							['singRIGHT', 		'BF NOTE RIGHT0', 		24, false],
-							['singDOWN', 		'BF NOTE DOWN0', 		24, false],
-							['singUPmiss', 		'BF NOTE UP MISS', 		24, false],
-							['singLEFTmiss', 	'BF NOTE LEFT MISS', 	24, false],
-							['singRIGHTmiss', 	'BF NOTE RIGHT MISS', 	24, false],
-							['singDOWNmiss', 	'BF NOTE DOWN MISS', 	24, false],
-							['hey', 			'BF HEY', 				24, false],
-							['scared', 			'BF idle shaking', 		24, true],
-						];
-						
-						flipX = true;
-					}
-					else if(curChar == "face")
-					{
-						spriteType = ATLAS;
-						doidoChar.spritesheet += 'face';
-						doidoChar.anims = [
-							['idle', 			'idle-alive', 		24, false],
-							['idlemiss', 		'idle-dead', 		24, false],
-
-							['singLEFT', 		'left-alive', 		24, false],
-							['singDOWN', 		'down-alive', 		24, false],
-							['singUP', 			'up-alive', 		24, false],
-							['singRIGHT', 		'right-alive', 		24, false],
-							['singLEFTmiss', 	'left-dead', 		24, false],
-							['singDOWNmiss', 	'down-dead', 		24, false],
-							['singUPmiss', 		'up-dead', 			24, false],
-							['singRIGHTmiss', 	'right-dead', 		24, false],
-						];
-					}
+						['singLEFT', 		'left-alive', 		24, false],
+						['singDOWN', 		'down-alive', 		24, false],
+						['singUP', 			'up-alive', 		24, false],
+						['singRIGHT', 		'right-alive', 		24, false],
+						['singLEFTmiss', 	'left-dead', 		24, false],
+						['singDOWNmiss', 	'down-dead', 		24, false],
+						['singUPmiss', 		'up-dead', 			24, false],
+						['singRIGHTmiss', 	'right-dead', 		24, false],
+					];
 				}
 				this.curChar = curChar;
 			
@@ -368,88 +319,82 @@ class Character extends FlxAnimate
 				flipX = true;
 		}
 
-		if(!foundInDoido) {
-			// Load via Psych Engine Logic
-			loadPsychCharacter(curChar);
-		} else {
-			// Legacy Doido Logic
-			if(isPixelSprite) antialiasing = false;
+		if(isPixelSprite) antialiasing = false;
 
-			if(spriteType != ATLAS)
-			{
-				if(Paths.fileExists('images/${doidoChar.spritesheet}.txt')) {
-					frames = Paths.getPackerAtlas(doidoChar.spritesheet);
-					spriteType = PACKER;
-				}
-				else if(Paths.fileExists('images/${doidoChar.spritesheet}.json')) {
-					frames = Paths.getAsepriteAtlas(doidoChar.spritesheet);
-					spriteType = ASEPRITE;
-				}
-				else if(doidoChar.extrasheets != null) {
-					frames = Paths.getMultiSparrowAtlas(doidoChar.spritesheet, doidoChar.extrasheets);
-					spriteType = MULTISPARROW;
-				}
-				else
-					frames = Paths.getSparrowAtlas(doidoChar.spritesheet);
-
-				for(i in 0...doidoChar.anims.length)
-				{
-					var anim:Array<Dynamic> = doidoChar.anims[i];
-					if(anim.length > 4)
-						animation.addByIndices(anim[0],  anim[1], anim[4], "", anim[2], anim[3]);
-					else
-						animation.addByPrefix(anim[0], anim[1], anim[2], anim[3]);
-				}
+		if(spriteType != ATLAS)
+		{
+			if(Paths.fileExists('images/${doidoChar.spritesheet}.txt')) {
+				frames = Paths.getPackerAtlas(doidoChar.spritesheet);
+				spriteType = PACKER;
+			}
+			else if(Paths.fileExists('images/${doidoChar.spritesheet}.json')) {
+				frames = Paths.getAsepriteAtlas(doidoChar.spritesheet);
+				spriteType = ASEPRITE;
+			}
+			else if(doidoChar.extrasheets != null) {
+				frames = Paths.getMultiSparrowAtlas(doidoChar.spritesheet, doidoChar.extrasheets);
+				spriteType = MULTISPARROW;
 			}
 			else
-			{
-				// :shushing_face:
-				isAnimateAtlas = true;
+				frames = Paths.getSparrowAtlas(doidoChar.spritesheet);
 
-				loadAtlas(Paths.getPath('images/${doidoChar.spritesheet}'));
-				showPivot = false;
-				for(i in 0...doidoChar.anims.length)
-				{
-					var dAnim:Array<Dynamic> = doidoChar.anims[i];
-					if(dAnim.length > 4)
-						anim.addBySymbolIndices(dAnim[0], dAnim[1], dAnim[4], dAnim[2], dAnim[3]);
-					else
-						anim.addBySymbol(dAnim[0], dAnim[1], dAnim[2], dAnim[3]);
-				}
-			}
-
-			// adding animations to array
-			for(i in 0...doidoChar.anims.length) {
-				var daAnim = doidoChar.anims[i][0];
-				if(animExists(daAnim) && !animList.contains(daAnim))
-					animList.push(daAnim);
-			}
-
-			// prevents crashing
-			for(i in 0...idleAnims.length)
+			for(i in 0...doidoChar.anims.length)
 			{
-				if(!animList.contains(idleAnims[i]))
-					idleAnims[i] = animList[0];
+				var anim:Array<Dynamic> = doidoChar.anims[i];
+				if(anim.length > 4)
+					animation.addByIndices(anim[0],  anim[1], anim[4], "", anim[2], anim[3]);
+				else
+					animation.addByPrefix(anim[0], anim[1], anim[2], anim[3]);
 			}
-			
-			// offset gettin'
-			switch(curChar)
+		}
+		else
+		{
+			// :shushing_face:
+			isAnimateAtlas = true;
+
+			loadAtlas(Paths.getPath('images/${doidoChar.spritesheet}'));
+			showPivot = false;
+			for(i in 0...doidoChar.anims.length)
 			{
-				default:
-					try {
-						var charData:DoidoOffsets = cast Paths.json('images/characters/_offsets/${curChar}');
-						
-						for(i in 0...charData.animOffsets.length)
-						{
-							var animData:Array<Dynamic> = charData.animOffsets[i];
-							addOffset(animData[0], animData[1], animData[2]);
-						}
-						globalOffset.set(charData.globalOffset[0], charData.globalOffset[1]);
-						cameraOffset.set(charData.cameraOffset[0], charData.cameraOffset[1]);
-					} catch(e) {
-						Logs.print('$curChar offsets not found', WARNING);
+				var dAnim:Array<Dynamic> = doidoChar.anims[i];
+				if(dAnim.length > 4)
+					anim.addBySymbolIndices(dAnim[0], dAnim[1], dAnim[4], dAnim[2], dAnim[3]);
+				else
+					anim.addBySymbol(dAnim[0], dAnim[1], dAnim[2], dAnim[3]);
+			}
+		}
+
+		// adding animations to array
+		for(i in 0...doidoChar.anims.length) {
+			var daAnim = doidoChar.anims[i][0];
+			if(animExists(daAnim) && !animList.contains(daAnim))
+				animList.push(daAnim);
+		}
+
+		// prevents crashing
+		for(i in 0...idleAnims.length)
+		{
+			if(!animList.contains(idleAnims[i]))
+				idleAnims[i] = animList[0];
+		}
+		
+		// offset gettin'
+		switch(curChar)
+		{
+			default:
+				try {
+					var charData:DoidoOffsets = cast Paths.json('images/characters/_offsets/${curChar}');
+					
+					for(i in 0...charData.animOffsets.length)
+					{
+						var animData:Array<Dynamic> = charData.animOffsets[i];
+						addOffset(animData[0], animData[1], animData[2]);
 					}
-			}
+					globalOffset.set(charData.globalOffset[0], charData.globalOffset[1]);
+					cameraOffset.set(charData.cameraOffset[0], charData.cameraOffset[1]);
+				} catch(e) {
+					Logs.print('$curChar offsets not found', WARNING);
+				}
 		}
 		
 		playAnim(idleAnims[0]);
@@ -462,102 +407,6 @@ class Character extends FlxAnimate
 
 		dance();
 	}
-
-	function loadPsychCharacter(char:String):Void
-	{
-		var path = 'characters/$char.json';
-		if(!Paths.fileExists(path)) {
-			// Fallback to BF if missing
-			char = "bf";
-			path = 'characters/bf.json';
-		}
-
-		try {
-			var rawJson:CharacterFile = cast Paths.json(path.replace(".json", "")); // Paths.json adds extension
-			
-			// Load texture
-			var imagePath = rawJson.image;
-			if(Paths.fileExists('images/$imagePath.txt')) {
-				frames = Paths.getPackerAtlas(imagePath);
-				spriteType = PACKER;
-			}
-			else if(Paths.fileExists('images/$imagePath.json')) {
-				frames = Paths.getAsepriteAtlas(imagePath);
-				spriteType = ASEPRITE;
-			}
-			else {
-				frames = Paths.getSparrowAtlas(imagePath);
-				spriteType = SPARROW;
-			}
-			
-			imageFile = imagePath;
-			jsonScale = rawJson.scale;
-			if(rawJson.scale != 1) {
-				scale.set(jsonScale, jsonScale);
-				updateHitbox();
-			}
-
-			if(rawJson.position != null && rawJson.position.length > 1)
-				globalOffset.set(rawJson.position[0], rawJson.position[1]);
-			
-			if(rawJson.camera_position != null && rawJson.camera_position.length > 1)
-				cameraOffset.set(rawJson.camera_position[0], rawJson.camera_position[1]);
-
-			healthIcon = rawJson.healthicon;
-			holdLength = rawJson.sing_duration;
-			flipX = (rawJson.flip_x == true);
-			originalFlipX = flipX;
-			
-			if(rawJson.no_antialiasing) {
-				antialiasing = false;
-				noAntialiasing = true;
-			}
-
-			if(rawJson.healthbar_colors != null && rawJson.healthbar_colors.length > 2)
-				healthColorArray = rawJson.healthbar_colors;
-			
-			vocalsFile = rawJson.vocals_file;
-
-			// Load Animations
-			if(rawJson.animations != null && rawJson.animations.length > 0) {
-				for(anim in rawJson.animations) {
-					var animAnim = anim.anim;
-					var animName = anim.name;
-					var animFps = anim.fps;
-					var animLoop = anim.loop;
-					var animIndices = anim.indices;
-
-					if(animIndices != null && animIndices.length > 0)
-						animation.addByIndices(animAnim, animName, animIndices, "", animFps, animLoop);
-					else
-						animation.addByPrefix(animAnim, animName, animFps, animLoop);
-					
-					if(anim.offsets != null && anim.offsets.length > 1)
-						addOffset(animAnim, anim.offsets[0], anim.offsets[1]);
-					else
-						addOffset(animAnim, 0, 0);
-					
-					if(!animList.contains(animAnim))
-						animList.push(animAnim);
-				}
-			}
-
-			// Setup Idle
-			idleAnims = [];
-			if(animList.contains("danceLeft") && animList.contains("danceRight")) {
-				idleAnims = ["danceLeft", "danceRight"];
-				quickDancer = true;
-			} else {
-				idleAnims = ["idle"];
-			}
-
-		} catch(e:Dynamic) {
-			Logs.print('Error loading Psych character $char: $e', WARNING);
-		}
-	}
-
-	// Legacy fields
-	public var imageFile:String = '';
 
 	private var curDance:Int = 0;
 
