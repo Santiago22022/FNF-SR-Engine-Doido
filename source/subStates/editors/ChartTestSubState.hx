@@ -16,6 +16,7 @@ import flixel.addons.effects.FlxTrail;
 import flixel.addons.ui.FlxUICheckBox;
 import flixel.addons.ui.FlxUINumericStepper;
 import flixel.group.FlxGroup;
+import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.math.FlxMath;
 import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
@@ -28,6 +29,7 @@ import flixel.util.FlxTimer;
 import objects.*;
 import objects.hud.*;
 import objects.note.*;
+import backend.utils.ObjectPool;
 import shaders.*;
 import states.PlayState;
 import states.editors.ChartingState;
@@ -58,6 +60,7 @@ class ChartTestSubState extends MusicBeatSubState
 	var strumlines:FlxTypedGroup<Strumline>;
 	var bfStrumline:Strumline;
 	var dadStrumline:Strumline;
+	var notePool:ObjectPool<Note>;
 	
 	var unspawnCount:Int = 0;
 	var unspawnNotes:Array<Note> = [];
@@ -72,6 +75,8 @@ class ChartTestSubState extends MusicBeatSubState
 	public static var noteInfo:Bool = true;
 
 	var playing:Bool = true;
+	var infoUpdateTimer:Float = 0;
+	var lastInfoText:String = "";
 
 	public static function resetStatics()
 	{
@@ -103,9 +108,9 @@ class ChartTestSubState extends MusicBeatSubState
 		assetModifier = PlayState.assetModifier;
 
 		if(hasHitsounds == null)
-			hasHitsounds = (SaveData.data.get("Hitsounds") != "OFF");
+			hasHitsounds = (SaveData.data.exists("Hitsounds") && SaveData.data.get("Hitsounds") != "OFF");
 		if(volHitsounds == null)
-			volHitsounds = (SaveData.data.get("Hitsound Volume") / 100);
+			volHitsounds = clampVolume(SaveData.data.exists("Hitsound Volume") ? (SaveData.data.get("Hitsound Volume") / 100) : 1.0);
 		
 		// adjusting the conductor
 		Conductor.setBPM(SONG.bpm);
@@ -165,7 +170,9 @@ class ChartTestSubState extends MusicBeatSubState
 		//Conductor.songPos = -Conductor.crochet * 5;
 		
 		unspawnNotes = [];
-		var checkUnspawnNotes:Array<Note> = ChartLoader.getChart(SONG);
+		notePool = new ObjectPool(Note, 0, null, function(note:Note) note.resetNote());
+		var checkUnspawnNotes:Array<Note> = ChartLoader.getChart(SONG, notePool);
+		checkUnspawnNotes.sort(function(a:Note, b:Note) return Reflect.compare(a.songTime, b.songTime));
 		
 		for(note in checkUnspawnNotes)
 		{
@@ -187,6 +194,7 @@ class ChartTestSubState extends MusicBeatSubState
 		}
 
 		unspawnEvents = ChartLoader.getEvents(EVENTS);
+		unspawnEvents.sort(function(a:EventNote, b:EventNote) return Reflect.compare(a.songTime, b.songTime));
 		for(daEvent in unspawnEvents)
 		{
 			// skipping events
@@ -197,10 +205,10 @@ class ChartTestSubState extends MusicBeatSubState
 			}
 		}
 		
-		add(infoTxt = new FlxText(0, 0, 0, "hi there! i am using whatsapp"));
+		add(infoTxt = new FlxText(0, 0, 0, ""));
 		infoTxt.setFormat(Main.gFont, 28, 0xFFFFFFFF, CENTER);
 		infoTxt.setBorderStyle(OUTLINE, 0xFF000000, 1.5);
-		updateInfo();
+		updateInfo(true);
 
 		add(botplayTxt = new FlxText(0, 0, 0, "[BOTPLAY]"));
 		botplayTxt.setFormat(Main.gFont, 32, 0xFFFFFFFF, CENTER);
@@ -226,7 +234,7 @@ class ChartTestSubState extends MusicBeatSubState
 				{
 					strumline.downscroll = downscroll;
 					strumline.updateHitbox();
-					updateInfo();
+					updateInfo(true);
 				}
 			},
 			function() {
@@ -235,7 +243,7 @@ class ChartTestSubState extends MusicBeatSubState
 			},
 			function() {
 				noteInfo = !noteInfo;
-				updateInfo();
+				updateInfo(true);
 			}
 		);
 		add(modGrp);
@@ -244,16 +252,31 @@ class ChartTestSubState extends MusicBeatSubState
 		DiscordIO.changePresence("Testing: " + SONG.song.toUpperCase().replace("-", " "));
 	}
 	
-	function updateInfo()
+	function updateInfo(force:Bool = false)
 	{
 		infoTxt.visible = noteInfo;
 		if(!noteInfo) return;
 
-		infoTxt.text = 'Accuracy: ${Timings.accuracy}%' + ' -- Step: ${curStep}\n';
-		infoTxt.text +='Hits: ${Timings.notesHit} -- Misses: ${Timings.misses}';
+		var newText:String = 'Accuracy: ${Timings.accuracy}%' + ' -- Step: ${curStep}\n';
+		newText +='Hits: ${Timings.notesHit} -- Misses: ${Timings.misses}';
+		if(!force && newText == lastInfoText)
+			return;
+
+		lastInfoText = newText;
+		infoTxt.text = newText;
 		
 		infoTxt.screenCenter(X);
 		infoTxt.y = (downscroll ? 15 : FlxG.height - infoTxt.height - 15);
+	}
+
+	inline function clampVolume(val:Dynamic):Float
+	{
+		var parsed:Float = Std.parseFloat(Std.string(val));
+		if(Math.isNaN(parsed))
+			parsed = 1.0;
+		if(parsed < 0) parsed = 0;
+		if(parsed > 1) parsed = 1;
+		return parsed;
 	}
 
 	public function onEventHit(daEvent:EventNote, preload:Bool = false)
@@ -528,7 +551,7 @@ class ChartTestSubState extends MusicBeatSubState
 			modGrp.isActive = !modGrp.isActive;
 
 		hasHitsounds = modGrp.playTicks.checked;
-		volHitsounds = modGrp.stepperTicks.value;
+		volHitsounds = clampVolume(modGrp.stepperTicks.value);
 		
 		//if(startedCountdown)
 		if(playing)
@@ -602,6 +625,13 @@ class ChartTestSubState extends MusicBeatSubState
 				thisStrumline.addNote(unsNote);
 				unspawnCount++;
 			}
+		}
+
+		infoUpdateTimer += elapsed;
+		if(infoUpdateTimer >= 0.05)
+		{
+			infoUpdateTimer = 0;
+			updateInfo();
 		}
 		
 		// strumline handler!!

@@ -4,6 +4,9 @@ typedef DoidoOffsets = {
 	var animOffsets:Array<Array<Dynamic>>;
 	var globalOffset:Array<Float>;
 	var cameraOffset:Array<Float>;
+	var ?spritesheet:String;
+	var ?anims:Array<Dynamic>;
+	var ?extrasheets:Array<String>;
 }
 
 typedef DoidoCharacter = {
@@ -46,7 +49,7 @@ class CharacterUtil
 
 	public static function charList():Array<String>
 	{
-		return [
+		var list:Array<String> = [
 			"dad",
 			"gf",
 			"bf",
@@ -65,5 +68,20 @@ class CharacterUtil
 			"zero",
 			"face"
 		];
+
+		try {
+			var folders:Array<String> = ['images/characters', 'images/characters/_offsets', 'characters'];
+			for(folder in folders)
+			{
+				var files = Paths.readDir(folder, [".json"]);
+				for(file in files)
+				{
+					if(!list.contains(file) && file != "Animation")
+						list.push(file);
+				}
+			}
+		} catch(e) {}
+
+		return list;
 	}
 }

@@ -7,6 +7,7 @@ import flxanimate.FlxAnimate;
 import backend.utils.CharacterUtil;
 import backend.utils.CharacterUtil.*;
 import objects.note.Note;
+import tjson.TJSON;
 
 using StringTools;
 
@@ -52,12 +53,132 @@ class Character extends FlxAnimate
 		super(0,0,false);
 		this.onEditor = onEditor;
 		this.isPlayer = isPlayer;
-		this.curChar = curChar;
+		this.curChar = curChar.toLowerCase().trim();
+		curChar = this.curChar;
 		
 		antialiasing = FlxSprite.defaultAntialiasing;
 		isPixelSprite = false;
 		
 		var doidoChar = CharacterUtil.defaultChar();
+		var charData:Dynamic = null;
+		
+		var jsonPaths:Array<String> = [
+			'images/characters/_offsets/${curChar}',
+			'images/characters/${curChar}',
+			'characters/${curChar}',
+			'data/characters/${curChar}'
+		];
+
+		Logs.print('Attempting to load character: $curChar', TRACE);
+		for(path in jsonPaths)
+		{
+			if(Paths.fileExists(path + '.json'))
+			{
+				try {
+					var rawJson = Paths.getContent(path + '.json');
+					if(rawJson != null && rawJson.length > 0) {
+						charData = TJSON.parse(rawJson);
+						Logs.print('Successfully loaded character data from: $path.json', TRACE);
+						break;
+					}
+				} catch(e) {
+					Logs.print('Error parsing JSON at $path.json: $e', ERROR);
+				}
+			}
+		}
+
+		if(charData == null)
+			Logs.print('No configuration JSON found for character: $curChar. Using defaults.', WARNING);
+
+		if(charData != null)
+		{
+			try {
+				if(Reflect.hasField(charData, "image") && Reflect.hasField(charData, "animations"))
+				{
+					var img:String = Reflect.field(charData, "image");
+					if(img == null || img.length == 0)
+						img = 'characters/face';
+					
+					if(img.indexOf("/") == -1)
+						img = 'characters/$img';
+					
+					doidoChar.spritesheet = img;
+					var psychAnims:Array<Dynamic> = Reflect.field(charData, "animations");
+					for (anim in psychAnims)
+					{
+						if(anim == null) continue;
+						var name:String = Reflect.field(anim, "anim");
+						var symbol:String = Reflect.field(anim, "name");
+						if(name == null || symbol == null) continue;
+						
+						var fps:Int = 24;
+						try { fps = Reflect.field(anim, "fps"); } catch(e) {}
+						var loop:Bool = false;
+						try { loop = Reflect.field(anim, "loop"); } catch(e) {}
+						var indices:Array<Int> = Reflect.field(anim, "indices");
+						
+						if (indices != null && indices.length > 0)
+							doidoChar.anims.push([name, symbol, fps, loop, indices]);
+						else
+							doidoChar.anims.push([name, symbol, fps, loop]);
+	
+						var off:Array<Float> = Reflect.field(anim, "offsets");
+						if (off != null && off.length >= 2)
+							addOffset(name, off[0], off[1]);
+					}
+					
+					if (Reflect.hasField(charData, "no_antialiasing"))
+						antialiasing = !Reflect.field(charData, "no_antialiasing");
+					if (Reflect.hasField(charData, "flip_x"))
+						flipX = Reflect.field(charData, "flip_x");
+					
+					if (Reflect.hasField(charData, "scale"))
+					{
+						var s:Float = 1;
+						try { s = Std.parseFloat(Std.string(Reflect.field(charData, "scale"))); } catch(e) { s = 1; }
+						scale.set(s, s);
+					}
+
+					// Psych Engine character position offset (shifts character relative to stage position)
+					if (Reflect.hasField(charData, "position"))
+					{
+						var pos:Array<Dynamic> = Reflect.field(charData, "position");
+						if(pos != null && pos.length >= 2)
+						{
+							var px:Float = Std.parseFloat(Std.string(pos[0]));
+							var py:Float = Std.parseFloat(Std.string(pos[1]));
+							if(!Math.isNaN(px)) globalOffset.x = px;
+							if(!Math.isNaN(py)) globalOffset.y = py;
+						}
+					}
+
+					// Psych Engine camera position offset (shifts camera when focusing on this character)
+					if (Reflect.hasField(charData, "camera_position"))
+					{
+						var cam:Array<Dynamic> = Reflect.field(charData, "camera_position");
+						if(cam != null && cam.length >= 2)
+						{
+							var cx:Float = Std.parseFloat(Std.string(cam[0]));
+							var cy:Float = Std.parseFloat(Std.string(cam[1]));
+							if(!Math.isNaN(cx)) cameraOffset.x = cx;
+							if(!Math.isNaN(cy)) cameraOffset.y = cy;
+						}
+					}
+				}
+				else
+				{
+					if(Reflect.hasField(charData, "spritesheet"))
+						doidoChar.spritesheet = Reflect.field(charData, "spritesheet");
+					if(Reflect.hasField(charData, "anims"))
+						doidoChar.anims = Reflect.field(charData, "anims");
+					if(Reflect.hasField(charData, "extrasheets"))
+						doidoChar.extrasheets = Reflect.field(charData, "extrasheets");
+				}
+			} catch(e) {
+				Logs.print('Error processing character data for $curChar: $e', ERROR);
+			}
+		}
+
 		switch(curChar)
 		{
 			case "zero":
@@ -264,45 +385,48 @@ class Character extends FlxAnimate
 				];
 			
 			default: // case "bf"
-				if(!["bf", "face"].contains(curChar))
-					curChar = (isPlayer ? "bf" : "face");
-
-				if(curChar == "bf")
+				if(doidoChar.anims.length == 0)
 				{
-					doidoChar.spritesheet += 'bf/BOYFRIEND';
-					doidoChar.anims = [
-						['idle', 			'BF idle dance', 		24, false],
-						['singUP', 			'BF NOTE UP0', 			24, false],
-						['singLEFT', 		'BF NOTE LEFT0', 		24, false],
-						['singRIGHT', 		'BF NOTE RIGHT0', 		24, false],
-						['singDOWN', 		'BF NOTE DOWN0', 		24, false],
-						['singUPmiss', 		'BF NOTE UP MISS', 		24, false],
-						['singLEFTmiss', 	'BF NOTE LEFT MISS', 	24, false],
-						['singRIGHTmiss', 	'BF NOTE RIGHT MISS', 	24, false],
-						['singDOWNmiss', 	'BF NOTE DOWN MISS', 	24, false],
-						['hey', 			'BF HEY', 				24, false],
-						['scared', 			'BF idle shaking', 		24, true],
-					];
-					
-					flipX = true;
-				}
-				else if(curChar == "face")
-				{
-					spriteType = ATLAS;
-					doidoChar.spritesheet += 'face';
-					doidoChar.anims = [
-						['idle', 			'idle-alive', 		24, false],
-						['idlemiss', 		'idle-dead', 		24, false],
+					if(!["bf", "face"].contains(curChar))
+						curChar = (isPlayer ? "bf" : "face");
 
-						['singLEFT', 		'left-alive', 		24, false],
-						['singDOWN', 		'down-alive', 		24, false],
-						['singUP', 			'up-alive', 		24, false],
-						['singRIGHT', 		'right-alive', 		24, false],
-						['singLEFTmiss', 	'left-dead', 		24, false],
-						['singDOWNmiss', 	'down-dead', 		24, false],
-						['singUPmiss', 		'up-dead', 			24, false],
-						['singRIGHTmiss', 	'right-dead', 		24, false],
-					];
+					if(curChar == "bf")
+					{
+						doidoChar.spritesheet += 'bf/BOYFRIEND';
+						doidoChar.anims = [
+							['idle', 			'BF idle dance', 		24, false],
+							['singUP', 			'BF NOTE UP0', 			24, false],
+							['singLEFT', 		'BF NOTE LEFT0', 		24, false],
+							['singRIGHT', 		'BF NOTE RIGHT0', 		24, false],
+							['singDOWN', 		'BF NOTE DOWN0', 		24, false],
+							['singUPmiss', 		'BF NOTE UP MISS', 		24, false],
+							['singLEFTmiss', 	'BF NOTE LEFT MISS', 	24, false],
+							['singRIGHTmiss', 	'BF NOTE RIGHT MISS', 	24, false],
+							['singDOWNmiss', 	'BF NOTE DOWN MISS', 	24, false],
+							['hey', 			'BF HEY', 				24, false],
+							['scared', 			'BF idle shaking', 		24, true],
+						];
+						
+						flipX = true;
+					}
+					else if(curChar == "face")
+					{
+						spriteType = ATLAS;
+						doidoChar.spritesheet += 'face';
+						doidoChar.anims = [
+							['idle', 			'idle-alive', 		24, false],
+							['idlemiss', 		'idle-dead', 		24, false],
+
+							['singLEFT', 		'left-alive', 		24, false],
+							['singDOWN', 		'down-alive', 		24, false],
+							['singUP', 			'up-alive', 		24, false],
+							['singRIGHT', 		'right-alive', 		24, false],
+							['singLEFTmiss', 	'left-dead', 		24, false],
+							['singDOWNmiss', 	'down-dead', 		24, false],
+							['singUPmiss', 		'up-dead', 			24, false],
+							['singRIGHTmiss', 	'right-dead', 		24, false],
+						];
+					}
 				}
 				this.curChar = curChar;
 			
@@ -321,83 +445,124 @@ class Character extends FlxAnimate
 
 		if(isPixelSprite) antialiasing = false;
 
-		if(spriteType != ATLAS)
-		{
-			if(Paths.fileExists('images/${doidoChar.spritesheet}.txt')) {
-				frames = Paths.getPackerAtlas(doidoChar.spritesheet);
-				spriteType = PACKER;
-			}
-			else if(Paths.fileExists('images/${doidoChar.spritesheet}.json')) {
-				frames = Paths.getAsepriteAtlas(doidoChar.spritesheet);
-				spriteType = ASEPRITE;
-			}
-			else if(doidoChar.extrasheets != null) {
-				frames = Paths.getMultiSparrowAtlas(doidoChar.spritesheet, doidoChar.extrasheets);
-				spriteType = MULTISPARROW;
+		try {
+			if(spriteType != ATLAS)
+			{
+				if(Paths.fileExists('images/${doidoChar.spritesheet}.txt')) {
+					frames = Paths.getPackerAtlas(doidoChar.spritesheet);
+					spriteType = PACKER;
+					Logs.print('Loaded Packer Atlas for $curChar', TRACE);
+				}
+				else if(Paths.fileExists('images/${doidoChar.spritesheet}.json')) {
+					frames = Paths.getAsepriteAtlas(doidoChar.spritesheet);
+					spriteType = ASEPRITE;
+					Logs.print('Loaded Aseprite Atlas for $curChar', TRACE);
+				}
+				else if(doidoChar.extrasheets != null) {
+					frames = Paths.getMultiSparrowAtlas(doidoChar.spritesheet, doidoChar.extrasheets);
+					spriteType = MULTISPARROW;
+					Logs.print('Loaded Multi-Sparrow Atlas for $curChar', TRACE);
+				}
+				else {
+					var xmlExists = Paths.fileExists('images/${doidoChar.spritesheet}.xml') || Paths.fileExists('images/${doidoChar.spritesheet}.XML');
+					if(xmlExists) {
+						frames = Paths.getSparrowAtlas(doidoChar.spritesheet);
+						spriteType = SPARROW;
+						Logs.print('Loaded Sparrow Atlas for $curChar', TRACE);
+					} else {
+						Logs.print('No atlas found for ${doidoChar.spritesheet} (tried .xml, .txt, .json)', WARNING);
+						// fallback to BF to avoid crash?
+					}
+				}
+
+				if(frames != null) {
+					for(i in 0...doidoChar.anims.length)
+					{
+						var anim:Array<Dynamic> = doidoChar.anims[i];
+						if(anim.length > 4)
+							animation.addByIndices(anim[0],  anim[1], anim[4], "", anim[2], anim[3]);
+						else
+							animation.addByPrefix(anim[0], anim[1], anim[2], anim[3]);
+					}
+				}
 			}
 			else
-				frames = Paths.getSparrowAtlas(doidoChar.spritesheet);
-
-			for(i in 0...doidoChar.anims.length)
 			{
-				var anim:Array<Dynamic> = doidoChar.anims[i];
-				if(anim.length > 4)
-					animation.addByIndices(anim[0],  anim[1], anim[4], "", anim[2], anim[3]);
-				else
-					animation.addByPrefix(anim[0], anim[1], anim[2], anim[3]);
+				// :shushing_face:
+				isAnimateAtlas = true;
+				var atlasPath = 'images/${doidoChar.spritesheet}';
+				Logs.print('Loading Animate Atlas from $atlasPath', TRACE);
+				loadAtlas(Paths.getPath(atlasPath));
+				showPivot = false;
+				for(i in 0...doidoChar.anims.length)
+				{
+					var dAnim:Array<Dynamic> = doidoChar.anims[i];
+					if(dAnim.length > 4)
+						anim.addBySymbolIndices(dAnim[0], dAnim[1], dAnim[4], dAnim[2], dAnim[3]);
+					else
+						anim.addBySymbol(dAnim[0], dAnim[1], dAnim[2], dAnim[3]);
+				}
+			}
+		} catch(e) {
+			Logs.print('CRITICAL ERROR loading frames for $curChar: $e', ERROR);
+		}
+
+		// adding animations to array
+		try {
+			for(i in 0...doidoChar.anims.length) {
+				var daAnim = doidoChar.anims[i][0];
+				if(animExists(daAnim) && !animList.contains(daAnim))
+					animList.push(daAnim);
+			}
+		} catch(e) {
+			Logs.print('Error adding animations to list for $curChar: $e', ERROR);
+		}
+
+		// prevents crashing
+		if(animList.length > 0)
+		{
+			for(i in 0...idleAnims.length)
+			{
+				if(!animList.contains(idleAnims[i]))
+					idleAnims[i] = animList[0];
 			}
 		}
 		else
 		{
-			// :shushing_face:
-			isAnimateAtlas = true;
-
-			loadAtlas(Paths.getPath('images/${doidoChar.spritesheet}'));
-			showPivot = false;
-			for(i in 0...doidoChar.anims.length)
-			{
-				var dAnim:Array<Dynamic> = doidoChar.anims[i];
-				if(dAnim.length > 4)
-					anim.addBySymbolIndices(dAnim[0], dAnim[1], dAnim[4], dAnim[2], dAnim[3]);
-				else
-					anim.addBySymbol(dAnim[0], dAnim[1], dAnim[2], dAnim[3]);
-			}
-		}
-
-		// adding animations to array
-		for(i in 0...doidoChar.anims.length) {
-			var daAnim = doidoChar.anims[i][0];
-			if(animExists(daAnim) && !animList.contains(daAnim))
-				animList.push(daAnim);
-		}
-
-		// prevents crashing
-		for(i in 0...idleAnims.length)
-		{
-			if(!animList.contains(idleAnims[i]))
-				idleAnims[i] = animList[0];
+			Logs.print('CRITICAL: No animations were loaded for $curChar!', ERROR);
+			// Add a dummy animation to prevent crashes during playback
+			animList.push('idle');
+			idleAnims = ['idle'];
 		}
 		
 		// offset gettin'
-		switch(curChar)
+		if(charData != null && Reflect.hasField(charData, "animOffsets"))
 		{
-			default:
-				try {
-					var charData:DoidoOffsets = cast Paths.json('images/characters/_offsets/${curChar}');
-					
-					for(i in 0...charData.animOffsets.length)
-					{
-						var animData:Array<Dynamic> = charData.animOffsets[i];
+			try {
+				var offsets:Array<Array<Dynamic>> = cast Reflect.field(charData, "animOffsets");
+				for(i in 0...offsets.length)
+				{
+					var animData:Array<Dynamic> = offsets[i];
+					if(animData != null && animData.length >= 3)
 						addOffset(animData[0], animData[1], animData[2]);
-					}
-					globalOffset.set(charData.globalOffset[0], charData.globalOffset[1]);
-					cameraOffset.set(charData.cameraOffset[0], charData.cameraOffset[1]);
-				} catch(e) {
-					Logs.print('$curChar offsets not found', WARNING);
 				}
+				
+				var gOff:Array<Float> = cast Reflect.field(charData, "globalOffset");
+				if(gOff != null && gOff.length >= 2)
+					globalOffset.set(gOff[0], gOff[1]);
+					
+				var cOff:Array<Float> = cast Reflect.field(charData, "cameraOffset");
+				if(cOff != null && cOff.length >= 2)
+					cameraOffset.set(cOff[0], cOff[1]);
+			} catch(e) {
+				Logs.print('Error loading offsets for $curChar: $e', ERROR);
+			}
 		}
 		
-		playAnim(idleAnims[0]);
+		if(animExists(idleAnims[0]))
+			playAnim(idleAnims[0]);
+		else if(animList.length > 0)
+			playAnim(animList[0]);
 
 		updateHitbox();
 		scaleOffset.set(offset.x, offset.y);

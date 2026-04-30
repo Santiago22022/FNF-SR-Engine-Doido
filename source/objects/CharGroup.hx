@@ -34,6 +34,7 @@ class CharGroup extends FlxTypedGroup<Character>
     {
         for(char in members)
         {
+            if (char == null) continue;
             char.x = x - (char.width / 2);
             char.y = y - char.height;
             char.x += char.globalOffset.x;
@@ -45,6 +46,7 @@ class CharGroup extends FlxTypedGroup<Character>
     {
         for(i in members)
         {
+            if (i == null) continue;
             if(i.curChar != curChar)
                 i.alpha = 0.0001;
             else

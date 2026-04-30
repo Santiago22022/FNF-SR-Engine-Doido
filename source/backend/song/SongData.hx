@@ -15,6 +15,7 @@ typedef SwagSong =
 
 	// Parity with other engines
 	var ?gfVersion:String;
+	var ?stage:String;
 }
 typedef SwagSection =
 {
@@ -109,6 +110,59 @@ class SongData
 		return week;
 	}
 
+	public static function loadModWeeks():Void
+	{
+		var files = backend.system.ModPaths.listDirRelative("weeks", null, [".json"], false);
+		for(file in files)
+		{
+			try {
+				var data:Dynamic = backend.system.ModPaths.readText('weeks/' + file);
+				if(data == null) continue;
+				var parsed = tjson.TJSON.parse(data);
+				var newWeek:FunkyWeek = {
+					songs: [],
+					weekFile: file.substring(0, file.lastIndexOf('.')),
+					weekName: Reflect.hasField(parsed, "weekName") ? parsed.weekName : "Mod Week",
+					chars: Reflect.hasField(parsed, "weekCharacters") ? cast parsed.weekCharacters : ['', '', ''],
+					freeplayOnly: Reflect.hasField(parsed, "hideStoryMode") ? parsed.hideStoryMode : false,
+					storyModeOnly: Reflect.hasField(parsed, "hideFreeplay") ? parsed.hideFreeplay : false,
+					diffs: defaultDiffs
+				};
+				if(Reflect.hasField(parsed, "difficulties"))
+				{
+					var diffsStr = StringTools.trim(Std.string(Reflect.field(parsed, "difficulties")));
+					if(diffsStr != "")
+						newWeek.diffs = diffsStr.split(",").map(StringTools.trim);
+				}
+				if(Reflect.hasField(parsed, "songs"))
+				{
+					var sArr:Array<Dynamic> = cast Reflect.field(parsed, "songs");
+					for(s in sArr)
+					{
+						if(s != null && Std.isOfType(s, Array))
+						{
+							var arr:Array<Dynamic> = cast s;
+							if(arr.length >= 2)
+								newWeek.songs.push([Std.string(arr[0]), Std.string(arr[1])]);
+						}
+					}
+				}
+				// check if already loaded
+				var found = false;
+				for(w in weeks) {
+					if(w.weekFile == newWeek.weekFile) {
+						found = true;
+						break;
+					}
+				}
+				if(!found)
+					weeks.push(newWeek);
+			} catch(e) {
+				Logs.print('Error loading week ' + file + ': ' + e, WARNING);
+			}
+		}
+	}
+
 	// fallback song. if you plan on removing -debug you should consider changing this to a song that does exist
 	inline public static function defaultSong():SwagSong
 	{
@@ -149,11 +203,50 @@ class SongData
 	inline public static function loadFromJson(jsonInput:String, ?diff:String = "normal"):SwagSong
 	{		
 		Logs.print('Chart Loaded: ' + '$jsonInput/$diff');
+		var targetDiff = diff;
+		var chartPath:Null<String> = null;
 
-		if(!Paths.fileExists('songs/$jsonInput/chart/$diff.json'))
-			diff = "normal";
+		var candidates:Array<String> = [
+			'songs/$jsonInput/chart/$targetDiff.json',
+			'data/$jsonInput/${jsonInput}-$targetDiff.json',
+			'data/$jsonInput/$targetDiff.json'
+		];
+		for(path in candidates)
+			if(Paths.fileExists(path))
+			{
+				chartPath = path;
+				break;
+			}
+
+		if(chartPath == null && targetDiff != "normal")
+		{
+			targetDiff = "normal";
+			candidates = [
+				'songs/$jsonInput/chart/$targetDiff.json',
+				'data/$jsonInput/${jsonInput}-$targetDiff.json',
+				'data/$jsonInput/$targetDiff.json'
+			];
+			for(path in candidates)
+				if(Paths.fileExists(path))
+				{
+					chartPath = path;
+					break;
+				}
+		}
+
+		if(chartPath == null)
+		{
+			Logs.print('Chart not found for $jsonInput/$diff', WARNING);
+			return defaultSong();
+		}
 		
-		var daSong:SwagSong = cast Paths.json('songs/$jsonInput/chart/$diff').song;
+		var chartKey:String = chartPath;
+		if(chartKey.endsWith(".json"))
+			chartKey = chartKey.substr(0, chartKey.length - 5);
+
+		var rawChart:Dynamic = Paths.json(chartKey);
+		var rawSong:Dynamic = Reflect.hasField(rawChart, "song") ? Reflect.field(rawChart, "song") : rawChart;
+		var daSong:SwagSong = cast rawSong;
 		
 		// formatting it
 		daSong = formatSong(daSong);
@@ -165,19 +258,37 @@ class SongData
 	{
 		var formatPath = 'events-$diff';
 
-		function checkFile():Bool {
-			return Paths.fileExists('songs/$jsonInput/chart/$formatPath.json');
+		function firstExisting():Null<String> {
+			var candidates = [
+				'songs/$jsonInput/chart/$formatPath.json',
+				'data/$jsonInput/${jsonInput}-$formatPath.json',
+				'data/$jsonInput/$formatPath.json'
+			];
+			for(path in candidates)
+				if(Paths.fileExists(path))
+					return path;
+			return null;
 		}
-		if(!checkFile())
+
+		var path = firstExisting();
+		if(path == null)
+		{
 			formatPath = 'events';
-		if(!checkFile()) {
+			path = firstExisting();
+		}
+
+		if(path == null) {
 			Logs.print('No Events Loaded');
 			return {songEvents: []};
 		}
 
-		Logs.print('Events Loaded: ' + '$jsonInput/chart/$formatPath');
+		Logs.print('Events Loaded: ' + path);
 
-		var daEvents:EventSong = cast Paths.json('songs/$jsonInput/chart/$formatPath');
+		var eventKey = path;
+		if(eventKey.endsWith(".json"))
+			eventKey = eventKey.substr(0, eventKey.length - 5);
+
+		var daEvents:EventSong = cast Paths.json(eventKey);
 		return daEvents;
 	}
 	
@@ -221,6 +332,8 @@ class SongData
 
 		if(SONG.gfVersion == null)
 			SONG.gfVersion = "stage-set";
+		if(SONG.stage == null)
+			SONG.stage = SONG.song;
 		
 		return SONG;
 	}

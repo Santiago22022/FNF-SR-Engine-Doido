@@ -131,6 +131,8 @@ class Note extends FlxSprite
 	public var songTime:Float = 0;
 	public var noteData:Int = 0;
 	public var noteType:String = "default";
+	public var lastScaleX:Float = -1;
+	public var lastScaleY:Float = -1;
 
 	public function setSongOffset():Void
 		songTime = initialSongTime + Conductor.musicOffset;
@@ -203,7 +205,21 @@ class Note extends FlxSprite
 		gotHeld = false;
 		gotReleased = false;
 		holdHitLength = 0;
-		//spawned = false;
+		spawned = false;
+		isHold = false;
+		isHoldEnd = false;
+		noteAngle = 0;
+		noteOffset.set(0, 0);
+		noteCrochet = 0;
+		holdLength = 0;
+		holdClipHeight = 0;
+		parentNote = null;
+		children.resize(0);
+		strumlineID = 0;
+		scrollSpeed = Math.NEGATIVE_INFINITY;
+		realAlpha = 1;
+		lastScaleX = -1;
+		lastScaleY = -1;
 		
 		clipRect = null;
 		setAlpha();

@@ -41,8 +41,11 @@ class StoryMenuState extends MusicBeatState
 		preloadAssets();
 		CoolUtil.playMusic("freakyMenu");
 
+		#if !html5
 		DiscordIO.changePresence("Story Mode - Choosin' a week");
+		#end
 		
+		SongData.loadModWeeks();
 		for(i in 0...SongData.weeks.length)
 		{
 			var week = SongData.getWeek(i);

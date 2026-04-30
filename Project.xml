@@ -73,12 +73,15 @@
 	<haxelib name="hxdiscord_rpc" if="DISCORD_RPC" />
 	<haxelib name="hxvlc" if="VIDEOS_ALLOWED" unless="html5" />
 	
+	<haxedef name="LUA_ALLOWED" />
+	<!-- Lua Support for Psych Engine Mods -->
+	<haxelib name="linc_luajit" />
+	
 	<!-- ______ Custom Doido Libraries ______ -->
 	<haxelib name="flxanimate-doido"/>
 	<haxelib name="tjson"/>
 
 	<!-- ______________________________ Haxedefines _____________________________ -->
-
 	<haxedef name="FLX_NO_TOUCH" unless="TOUCH_CONTROLS" />
 
 	<haxedef name="FLX_NO_FOCUS_LOST_SCREEN" />

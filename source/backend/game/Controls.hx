@@ -1,11 +1,13 @@
 package backend.game;
 
+import flixel.FlxG;
 import flixel.input.gamepad.FlxGamepadInputID as FlxPad;
 import flixel.input.keyboard.FlxKey;
 import flixel.input.FlxInput.FlxInputState;
 
 #if TOUCH_CONTROLS
 import flixel.util.FlxTimer;
+import openfl.ui.Multitouch;
 import backend.game.Mobile;
 import backend.game.MusicBeatData;
 import objects.mobile.DoidoPad;
@@ -269,6 +271,15 @@ class Controls
 	#if TOUCH_CONTROLS
 	public static var canTouch:Bool = false;
 	public static var timer:FlxTimer;
+	static var touchSupport:Null<Bool> = null;
+
+	public static function shouldUseTouch():Bool
+	{
+		if(touchSupport == null)
+			touchSupport = FlxG.onMobile || Multitouch.supportsTouchEvents;
+		return touchSupport;
+	}
+
 	public static function resetTimer() {
 		canTouch = false;
 
@@ -281,7 +292,7 @@ class Controls
 	}
 
 	public static function checkMobile(bind:String, inputState:FlxInputState) {
-		if(!canTouch)
+		if(!shouldUseTouch() || !canTouch)
 			return false;
 		
 		// DOIDOPAD
@@ -289,12 +300,13 @@ class Controls
 			var state = cast(Main.activeState);
 			var pad:DoidoPad = state.pad;
 
-			if(pad.padActive) {
+			if(pad != null && pad.padActive) {
 				if(pad.checkButton(bind, inputState))
 					return pad.checkButton(bind, inputState);
 
-				//if(bind == "ACCEPT" && inputState == JUST_PRESSED && (pad.checkButton(bind, PRESSED) || pad.checkButton(bind, JUST_RELEASED)))
-				//	return false;	
+				// Prevent accept while touching any pad button (e.g., navigation)
+				if(bind == "ACCEPT" && pad.anyButtonActive(inputState))
+					return false;
 			}
 		}
 
@@ -309,5 +321,11 @@ class Controls
 		else
 			return false;
 	}
+	#end
+	#if !TOUCH_CONTROLS
+	public static var canTouch:Bool = false;
+	public static function shouldUseTouch():Bool return false;
+	public static function resetTimer():Void {}
+	public static function checkMobile(bind:String, inputState:FlxInputState):Bool return false;
 	#end
 }
