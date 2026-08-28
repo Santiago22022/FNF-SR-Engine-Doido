@@ -73,9 +73,10 @@
 	<haxelib name="hxdiscord_rpc" if="DISCORD_RPC" />
 	<haxelib name="hxvlc" if="VIDEOS_ALLOWED" unless="html5" />
 	
-	<haxedef name="LUA_ALLOWED" />
+	<define name="LUA_ALLOWED" unless="html5"/>
 	<!-- Lua Support for Psych Engine Mods -->
-	<haxelib name="linc_luajit" />
+	<haxelib name="linc_luajit" if="LUA_ALLOWED"/>
+	<haxedef name="LUA_ALLOWED" if="LUA_ALLOWED"/>
 	
 	<!-- ______ Custom Doido Libraries ______ -->
 	<haxelib name="flxanimate-doido"/>

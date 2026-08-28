@@ -65,7 +65,7 @@ class CreditsState extends MusicBeatState
 		
 		// btw you dont need to credit everyone here on your mod
 		// just credit doido engine as a whole and we're good
-		addCategory("SR Engine Crew")
+		addCategory("SR Engine Crew");
         addCredit('Santiiaago', 	    'santiiaago', 0xFFC385FF, "SR Engine Owner and Main Coder", 				'');
 		addCategory("Doido Engine Crew");
 		addCredit('DiogoTV', 			'diogotv', 	 0xFFC385FF, "Doido Engine Owner and Main Coder", 				'https://bsky.app/profile/diogotv.bsky.social');

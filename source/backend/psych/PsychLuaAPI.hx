@@ -31,7 +31,14 @@ class PsychLuaAPI
 		removeQueue = [];
 
 		// Set some global variables Psych scripts expect
-		Lua.pushstring(lua, states.PlayState.SONG != null ? states.PlayState.SONG.song : "");
+		// Preserve original capitalisation from the chart (e.g. "Termination" not "termination")
+		var songDisplayName:String = "";
+		if(states.PlayState.SONG != null) {
+			var rawSong = states.PlayState.SONG.song;
+			if(rawSong != null && rawSong.length > 0)
+				songDisplayName = rawSong.charAt(0).toUpperCase() + rawSong.substr(1);
+		}
+		Lua.pushstring(lua, songDisplayName);
 		Lua.setglobal(lua, "songName");
 
 		Lua.pushstring(lua, "0.7.0");
@@ -60,6 +67,7 @@ class PsychLuaAPI
 
 		// Register API functions
 		Lua_helper.add_callback(lua, "makeLuaSprite", function(tag:String, image:String, x:Float, y:Float):Void {
+			Logs.print('LUA DEBUG: makeLuaSprite($tag, $image, $x, $y)', TRACE);
 			if(tag == null) return;
 			var spr = new FlxSprite(x, y);
 			if(image != null && image.length > 0)
@@ -88,6 +96,7 @@ class PsychLuaAPI
 		});
 
 		Lua_helper.add_callback(lua, "addLuaSprite", function(tag:String, inFront:Bool):Void {
+			Logs.print('LUA DEBUG: addLuaSprite($tag, $inFront)', TRACE);
 			var spr = luaSprites.get(tag);
 			if(spr == null) return;
 			var stage = Stage.instance;
@@ -220,6 +229,27 @@ class PsychLuaAPI
 				flixel.tweens.FlxTween.tween(obj, {y: cast(value, Float)}, duration, {ease: e});
 			}
 		});
+		// Tweening
+		Lua_helper.add_callback(lua, "cancelTween", function(tag:String):Void {
+			// Not yet natively supported for Lua tweens, stubbing to prevent crash
+			// In a full implementation, you'd track tweens by tag and call cancel()
+		});
+
+		Lua_helper.add_callback(lua, "getColorFromHex", function(str:String):Int {
+			Logs.print('LUA DEBUG: getColorFromHex($str)', TRACE);
+			return backend.utils.CoolUtil.stringToColor(str);
+		});
+
+		Lua_helper.add_callback(lua, "setObjectCamera", function(tag:String, cam:String):Void {
+			Logs.print('LUA DEBUG: setObjectCamera($tag, $cam)', TRACE);
+			var spr = luaSprites.get(tag);
+			if(spr == null) return;
+			var theCam = states.PlayState.instance.camGame;
+			if(cam.toLowerCase() == 'hud') theCam = states.PlayState.instance.camHUD;
+			else if(cam.toLowerCase() == 'other') theCam = states.PlayState.instance.camOther;
+			
+			spr.cameras = [theCam];
+		});
 
 		Lua_helper.add_callback(lua, "addAnimationByPrefix", function(tag:String, name:String, prefix:String, fps:Int, loop:Bool):Void {
 			var spr = luaSprites.get(tag);
@@ -250,6 +280,7 @@ class PsychLuaAPI
 		});
 
 		Lua_helper.add_callback(lua, "setProperty", function(prop:String, val:Dynamic):Void {
+			Logs.print('LUA DEBUG: setProperty($prop, $val)', TRACE);
 			if(prop == null) return;
 			
 			// Psych Engine compatibility mapping
@@ -368,6 +399,55 @@ class PsychLuaAPI
 		Lua_helper.add_callback(lua, "close", function():Void {
 			// no-op; lifecycle managed by PsychLuaManager
 		});
+
+		// Image preloading - just load the graphic into cache (Paths.image handles caching internally)
+		Lua_helper.add_callback(lua, "precacheImage", function(path:String):Void {
+			if(path != null && path.length > 0) {
+				try {
+					Paths.image(path); // this already caches it
+				} catch(e) {
+					Logs.print('precacheImage failed for $path: $e', WARNING);
+				}
+			}
+		});
+
+		// Sound preloading
+		Lua_helper.add_callback(lua, "precacheSound", function(path:String):Void {
+			if(path != null && path.length > 0) {
+				try {
+					Paths.sound(path); // cache without playing
+				} catch(e) {
+					Logs.print('precacheSound failed for $path: $e', WARNING);
+				}
+			}
+		});
+
+		// Object animation (for Lua sprites and PlayState chars)
+		Lua_helper.add_callback(lua, "objectPlayAnimation", function(tag:String, anim:String, forced:Bool):Void {
+			var spr = luaSprites.get(tag);
+			if(spr != null && spr.animation != null) {
+				spr.animation.play(anim, forced);
+				return;
+			}
+			var ps = states.PlayState.instance;
+			if(ps != null) {
+				var obj:Dynamic = Reflect.getProperty(ps, tag);
+				if(obj != null && Reflect.hasField(obj, "animation"))
+					Reflect.callMethod(Reflect.field(obj, "animation"), Reflect.field(Reflect.field(obj, "animation"), "play"), [anim, forced]);
+			}
+		});
+
+		// Object ordering stubs (layer reordering not fully supported yet)
+		Lua_helper.add_callback(lua, "setObjectOrder", function(tag:String, order:Int):Void {
+			// stub - layer reordering not supported
+		});
+		Lua_helper.add_callback(lua, "getObjectOrder", function(tag:String):Int {
+			return 0;
+		});
+
+		// Low quality flag
+		Lua.pushboolean(lua, false);
+		Lua.setglobal(lua, "lowQuality");
 
 		// Stub for Std.int which some Lua scripts define but shouldn't crash
 		// The polus.lua actually defines its own Std table at the bottom

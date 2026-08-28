@@ -255,10 +255,30 @@ class PlayState extends MusicBeatState
 
 		for(path in scriptPaths)
 		{
-			var newScript:Iris = new Iris(Paths.script('$path'), {name: path, autoRun: true, autoPreset: true});
-			loadedScripts.push(newScript);
+			try {
+				var newScript:Iris = new Iris(Paths.script('$path'), {name: path, autoRun: false, autoPreset: true});
+				newScript.set("this", instance);
+				newScript.set("game", instance);
+				newScript.set("Paths", Paths);
+				newScript.set("FlxG", flixel.FlxG);
+				newScript.set("FlxSprite", flixel.FlxSprite);
+				newScript.set("FlxTween", flixel.tweens.FlxTween);
+				newScript.set("FlxEase", flixel.tweens.FlxEase);
+				newScript.set("FlxTimer", flixel.util.FlxTimer);
+				newScript.set("Conductor", Conductor);
+				newScript.set("PlayState", PlayState);
+				newScript.set("Logs", Logs);
+				newScript.set("SaveData", SaveData);
+				newScript.set("add", add);
+				newScript.set("remove", remove);
+				newScript.set("insert", insert);
+				
+				newScript.execute();
+				loadedScripts.push(newScript);
+			} catch(e) {
+				Logs.print('Error loading script $path: ' + e, ERROR);
+			}
 		}
-		setScript("this", instance);
 
 		notePool = new ObjectPool(Note, 0, null, function(note:Note) note.resetNote());
 
@@ -291,6 +311,11 @@ class PlayState extends MusicBeatState
 		// default camera
 		FlxG.cameras.setDefaultDrawTarget(camGame, true);
 		
+		setScript("camGame", camGame);
+		setScript("camHUD", camHUD);
+		setScript("camStrum", camStrum);
+		setScript("camOther", camOther);
+
 		//camGame.zoom = 0.6;
 		callScript("create");
 		
@@ -299,6 +324,7 @@ class PlayState extends MusicBeatState
 		var stageName:String = (Reflect.hasField(SONG, "stage") && SONG.stage != null) ? SONG.stage : SONG.song;
 		stageBuild.reloadStageFromSong(stageName, SONG.gfVersion);
 		add(stageBuild);
+		setScript("stageBuild", stageBuild);
 
 		classicZoom = defaultCamZoom;
 		
@@ -312,6 +338,7 @@ class PlayState extends MusicBeatState
 				hudBuild = new HudDoido();
 				hudBuild.alpha = 0.0;
 		}
+		setScript("hudBuild", hudBuild);
 		
 		/*
 		*	if you want to change characters
@@ -334,13 +361,20 @@ class PlayState extends MusicBeatState
 			changeChar(char, char.curChar, (char != gf));
 		}
 		Logs.print("DEBUG: 3 - changeChar loop finished", TRACE);
+		setScript("gf", gf);
+		setScript("dad", dad);
+		setScript("boyfriend", boyfriend);
 
 		changeStage(stageBuild.curStage);
 		Logs.print("DEBUG: 4 - changeStage finished", TRACE);
 
 		// Init Lua AFTER stage defaults are applied and characters exist.
 		// onCreate can now override positions/zoom correctly via setProperty.
-		psychLua = new PsychLuaManager(SONG.song, songDiff);
+		try {
+			psychLua = new PsychLuaManager(SONG.song, songDiff);
+		} catch(e) {
+			Logs.print('Error initializing PsychLuaManager: $e', ERROR);
+		}
 		Logs.print("DEBUG: 5 - psychLua initialized", TRACE);
 
 		// Flush sprites the Lua stage queued during onCreate into the stage group
@@ -647,8 +681,10 @@ class PlayState extends MusicBeatState
 				startedCountdown = true;
 				for(strumline in strumlines.members)
 				{
+					if(strumline == null) continue;
 					for(strum in strumline.strumGroup)
 					{	
+						if(strum == null) continue;
 						// dad's notes spawn backwards
 						var strumMult:Int = (strumline.isPlayer ? strum.strumData : 3 - strum.strumData);
 

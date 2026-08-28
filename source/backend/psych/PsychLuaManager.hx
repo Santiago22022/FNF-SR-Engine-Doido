@@ -17,10 +17,15 @@ class PsychLuaManager
 	public function new(song:String, diff:String)
 	{
 		var songLower = song.toLowerCase();
+		Logs.print("LUA DEBUG: starting loadGlobals", TRACE);
 		loadGlobals();
+		Logs.print("LUA DEBUG: loadGlobals done, starting loadSongScripts", TRACE);
 		loadSongScripts(songLower, diff);
+		Logs.print("LUA DEBUG: loadSongScripts done, scripts.length=" + scripts.length, TRACE);
 		active = scripts.length > 0;
+		Logs.print("LUA DEBUG: calling onCreate, active=" + active, TRACE);
 		callAll("onCreate");
+		Logs.print("LUA DEBUG: onCreate done", TRACE);
 	}
 
 	function loadGlobals():Void
@@ -56,12 +61,18 @@ class PsychLuaManager
 
 	function addScript(path:String):Void
 	{
+		Logs.print('LUA DEBUG: addScript checking $path', TRACE);
 		var content:String = null;
 		if(ModPaths.exists(path))
 			content = ModPaths.readText(path);
 		if(content == null || content.trim() == "")
+		{
+			Logs.print('LUA DEBUG: addScript skipped (empty) $path', TRACE);
 			return;
+		}
+		Logs.print('LUA DEBUG: addScript loading $path (${content.length} bytes)', TRACE);
 		scripts.push(new PsychLuaScript(path, content));
+		Logs.print('LUA DEBUG: addScript done $path', TRACE);
 	}
 
 	public inline function onCreatePost():Void callAll("onCreatePost");
@@ -99,7 +110,11 @@ class PsychLuaManager
 	{
 		if(!active) return;
 		for(script in scripts)
+		{
+			Logs.print('LUA DEBUG: callAll calling $func on ${script.path}', TRACE);
 			script.call(func, args);
+			Logs.print('LUA DEBUG: callAll done $func on ${script.path}', TRACE);
+		}
 	}
 }
 
@@ -108,7 +123,7 @@ class PsychLuaManager
  */
 private class PsychLuaScript
 {
-	var path:String;
+	public var path:String;
 	#if LUA_ALLOWED
 	var lua:llua.State;
 	#end
@@ -117,11 +132,15 @@ private class PsychLuaScript
 	{
 		this.path = path;
 		#if LUA_ALLOWED
+		Logs.print('LUA DEBUG: PsychLuaScript.new $path - creating state', TRACE);
 		lua = createState();
+		Logs.print('LUA DEBUG: PsychLuaScript.new $path - state created: ${lua != null}', TRACE);
 		if(lua != null)
 		{
 			// Register all Psych Engine API functions
+			Logs.print('LUA DEBUG: PsychLuaScript.new $path - registering callbacks', TRACE);
 			PsychLuaAPI.registerCallbacks(lua);
+			Logs.print('LUA DEBUG: PsychLuaScript.new $path - callbacks registered, running script', TRACE);
 			// Execute the script
 			var ret = llua.LuaL.dostring(lua, code);
 			if(ret != 0)
@@ -130,6 +149,7 @@ private class PsychLuaScript
 				Logs.print('Lua error in $path: $err', ERROR);
 				llua.Lua.pop(lua, 1);
 			}
+			Logs.print('LUA DEBUG: PsychLuaScript.new $path - script executed ok', TRACE);
 		}
 		#end
 	}
@@ -146,7 +166,9 @@ private class PsychLuaScript
 				for(arg in args)
 					pushArg(lua, arg);
 			}
+			Logs.print('LUA DEBUG: pcall $func in $path (nargs=${args != null ? args.length : 0})', TRACE);
 			var ret = llua.Lua.pcall(lua, args != null ? args.length : 0, 0, 0);
+			Logs.print('LUA DEBUG: pcall $func in $path returned $ret', TRACE);
 			if(ret != 0)
 			{
 				var err = llua.Lua.tostring(lua, -1);

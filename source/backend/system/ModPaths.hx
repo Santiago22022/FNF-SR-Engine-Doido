@@ -45,6 +45,9 @@ class ModPaths
 		#if sys
 		if(resolved != null && FileSystem.exists(resolved))
 			return true;
+		var baseResolved = resolveBasePath(key, library);
+		if(FileSystem.exists(baseResolved))
+			return true;
 		#end
 		if(resolved != null && Assets.exists(resolved))
 			return true;
@@ -57,6 +60,9 @@ class ModPaths
 		#if sys
 		if(resolved != null && FileSystem.exists(resolved))
 			return File.getContent(resolved);
+		var baseResolved = resolveBasePath(key, library);
+		if(FileSystem.exists(baseResolved))
+			return File.getContent(baseResolved);
 		#end
 		if(resolved != null && Assets.exists(resolved))
 			return Assets.getText(resolved);
@@ -69,6 +75,9 @@ class ModPaths
 		#if sys
 		if(resolved != null && FileSystem.exists(resolved))
 			return File.getBytes(resolved);
+		var baseResolved = resolveBasePath(key, library);
+		if(FileSystem.exists(baseResolved))
+			return File.getBytes(baseResolved);
 		#end
 		if(resolved != null && Assets.exists(resolved))
 			return Assets.getBytes(resolved);
